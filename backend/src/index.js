@@ -66,15 +66,13 @@ app.use('/api/ai-rules', aiRulesRouter);
 app.use('/api/marketing', marketingRouter);
 app.use('/api/analytics', analyticsRouter);
 
-// Serve frontend build in production
-if (process.env.NODE_ENV === 'production') {
-  const frontendBuild = path.join(__dirname, '..', '..', 'frontend', 'dist');
-  if (fs.existsSync(frontendBuild)) {
-    app.use(express.static(frontendBuild));
-    app.get('*', (req, res) => {
-      res.sendFile(path.join(frontendBuild, 'index.html'));
-    });
-  }
+// Serve frontend build if dist exists (works in any NODE_ENV)
+const frontendBuild = path.join(__dirname, '..', '..', 'frontend', 'dist');
+if (fs.existsSync(frontendBuild)) {
+  app.use(express.static(frontendBuild));
+  app.get('*', (req, res) => {
+    res.sendFile(path.join(frontendBuild, 'index.html'));
+  });
 }
 
 // Global error handler
