@@ -12,4 +12,16 @@ export default defineConfig({
       },
     },
   },
+  build: {
+    chunkSizeWarningLimit: 1500,
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          'react-vendor':  ['react', 'react-dom', 'react-router-dom'],
+          'recharts':      ['recharts'],
+          'firebase':      ['firebase/app', 'firebase/auth'],
+        },
+      },
+    },
+  },
 });

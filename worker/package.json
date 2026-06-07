@@ -1,0 +1,17 @@
+{
+  "name": "ai-growthos-worker",
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler dev src/index.js",
+    "deploy": "wrangler deploy src/index.js",
+    "db:create": "wrangler d1 create growthos",
+    "db:migrate": "wrangler d1 execute growthos --file=migrations/0001_initial.sql",
+    "db:migrate:remote": "wrangler d1 execute growthos --remote --file=migrations/0001_initial.sql",
+    "secret:glm": "wrangler secret put GLM_API_KEY",
+    "secret:claude": "wrangler secret put ANTHROPIC_API_KEY"
+  },
+  "dependencies": {
+    "hono": "^4.12.23"
+  }
+}
