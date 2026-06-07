@@ -2,17 +2,11 @@ import React, { createContext, useContext, useState, useEffect } from 'react';
 
 const AVAILABLE_MODELS = [
   {
-    id: 'glm-4.5-air',
-    label: 'GLM-4.5 Air',
+    id: 'glm-5-turbo',
+    label: 'GLM-5 Turbo',
     provider: 'GLM',
     badge: '推薦',
-    description: '快速、低成本，適合日常任務',
-  },
-  {
-    id: 'glm-4.5',
-    label: 'GLM-4.5',
-    provider: 'GLM',
-    description: '均衡能力，適合複雜分析',
+    description: '高速高智能，系統預設主模型',
   },
   {
     id: 'glm-5',
@@ -22,10 +16,17 @@ const AVAILABLE_MODELS = [
     description: '最高智能，適合策略決策',
   },
   {
-    id: 'glm-5-turbo',
-    label: 'GLM-5 Turbo',
+    id: 'glm-4.5',
+    label: 'GLM-4.5',
     provider: 'GLM',
-    description: '高速高智能平衡版',
+    description: '均衡能力，適合複雜分析',
+  },
+  {
+    id: 'glm-4.5-air',
+    label: 'GLM-4.5 Air',
+    provider: 'GLM',
+    badge: '快速',
+    description: '輕量快速，適合高頻日常任務',
   },
   {
     id: 'claude-haiku-4-5-20251001',
@@ -155,7 +156,7 @@ const STORAGE_KEY = 'growthos_model_settings';
 const ModelSettingsContext = createContext(null);
 
 export function ModelSettingsProvider({ children }) {
-  const [selectedModel, setSelectedModel] = useState('glm-4.5-air');
+  const [selectedModel, setSelectedModel] = useState('glm-5-turbo');
   const [systemPrompt, setSystemPrompt] = useState(DEFAULT_SYSTEM_PROMPT);
   const [temperature, setTemperature] = useState(0.7);
 

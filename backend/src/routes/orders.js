@@ -82,7 +82,7 @@ router.put('/:id/status', async (req, res) => {
 
     // Generate AI notification
     const notifPrompt = `Generate a short, friendly customer notification message (max 2 sentences) for order #${order.platform_order_id || order.id} status change to "${status}". Customer name: ${order.contact_name}. ${tracking_number ? `Tracking: ${tracking_number}.` : ''} ${estimated_delivery ? `Estimated delivery: ${estimated_delivery}.` : ''} Reply in Traditional Chinese.`;
-    const notifResult = await callAI(notifPrompt, 'You are a customer notification AI. Write concise, warm order status notifications.', { model: 'glm-4.5-air', maxTokens: 200, temperature: 0.5 });
+    const notifResult = await callAI(notifPrompt, 'You are a customer notification AI. Write concise, warm order status notifications.', { model: 'glm-5-turbo', maxTokens: 200, temperature: 0.5 });
 
     run('INSERT INTO order_notifications (order_id, notification_type, channel, content, status) VALUES (?,?,?,?,?)',
       [req.params.id, status, order.contact_email ? 'email' : 'line', notifResult.content, 'sent']);
