@@ -271,11 +271,11 @@ router.post('/webhook/simulate', async (req, res) => {
 router.get('/stats', (req, res) => {
   try {
     const totalConvos = get('SELECT COUNT(*) as count FROM conversations')?.count || 0;
-    const openConvos = get('SELECT COUNT(*) as count FROM conversations WHERE status = "open"')?.count || 0;
-    const aiHandled = get('SELECT COUNT(*) as count FROM conversations WHERE assigned_to = "ai"')?.count || 0;
+    const openConvos = get("SELECT COUNT(*) as count FROM conversations WHERE status = 'open'")?.count || 0;
+    const aiHandled = get("SELECT COUNT(*) as count FROM conversations WHERE assigned_to = 'ai'")?.count || 0;
     const totalUnread = get('SELECT SUM(unread_count) as total FROM conversations')?.total || 0;
     const totalMessages = get('SELECT COUNT(*) as count FROM messages')?.count || 0;
-    const aiMessages = get('SELECT COUNT(*) as count FROM messages WHERE sent_by = "ai"')?.count || 0;
+    const aiMessages = get("SELECT COUNT(*) as count FROM messages WHERE sent_by = 'ai'")?.count || 0;
     const aiReplyRate = totalMessages > 0 ? Math.round((aiMessages / totalMessages) * 100) : 0;
     res.json({ totalConvos, openConvos, aiHandled, totalUnread, totalMessages, aiReplyRate });
   } catch (err) {

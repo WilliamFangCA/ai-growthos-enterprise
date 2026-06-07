@@ -37,12 +37,12 @@ router.get('/stats', (req, res) => {
   try {
     const total = get('SELECT COUNT(*) as count FROM orders')?.count || 0;
     const todayGMV = get(`SELECT SUM(total_amount) as gmv FROM orders WHERE date(created_at) = date('now')`)?.gmv || 0;
-    const pending = get('SELECT COUNT(*) as count FROM orders WHERE status = "pending"')?.count || 0;
-    const processing = get('SELECT COUNT(*) as count FROM orders WHERE status IN ("paid","processing")')?.count || 0;
-    const shipped = get('SELECT COUNT(*) as count FROM orders WHERE status IN ("shipped","in_transit")')?.count || 0;
-    const delivered = get('SELECT COUNT(*) as count FROM orders WHERE status = "delivered" OR status = "completed"')?.count || 0;
-    const refunds = get('SELECT COUNT(*) as count FROM orders WHERE status LIKE "refund%"')?.count || 0;
-    const totalRevenue = get('SELECT SUM(total_amount) as rev FROM orders WHERE status NOT IN ("refund_requested","refunded")')?.rev || 0;
+    const pending = get("SELECT COUNT(*) as count FROM orders WHERE status = 'pending'")?.count || 0;
+    const processing = get("SELECT COUNT(*) as count FROM orders WHERE status IN ('paid','processing')")?.count || 0;
+    const shipped = get("SELECT COUNT(*) as count FROM orders WHERE status IN ('shipped','in_transit')")?.count || 0;
+    const delivered = get("SELECT COUNT(*) as count FROM orders WHERE status = 'delivered' OR status = 'completed'")?.count || 0;
+    const refunds = get("SELECT COUNT(*) as count FROM orders WHERE status LIKE 'refund%'")?.count || 0;
+    const totalRevenue = get("SELECT SUM(total_amount) as rev FROM orders WHERE status NOT IN ('refund_requested','refunded')")?.rev || 0;
     res.json({ total, todayGMV, pending, processing, shipped, delivered, refunds, totalRevenue });
   } catch (err) {
     res.status(500).json({ error: err.message });
