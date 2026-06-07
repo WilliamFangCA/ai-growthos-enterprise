@@ -1,0 +1,13 @@
+{
+  "name": "ai-growthos-enterprise",
+  "version": "1.0.0",
+  "description": "AI-powered marketing automation system integrated with Auto Company AI agents",
+  "scripts": {
+    "install:all": "cd backend && npm install && cd ../frontend && npm install",
+    "dev": "concurrently --names \"BACKEND,FRONTEND\" --prefix-colors \"blue,green\" \"cd backend && node src/index.js\" \"cd frontend && npx vite --port 3000\"",
+    "start": "npm run dev"
+  },
+  "devDependencies": {
+    "concurrently": "^9.0.0"
+  }
+}
