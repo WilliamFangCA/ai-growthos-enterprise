@@ -1,15 +1,14 @@
-// Load .env from this project, then also try parent directories for API keys
+// Load .env for local dev; in production (Railway/Cloudflare) env vars are injected directly
 const path = require('path');
 const fs = require('fs');
-const dotenv = require('dotenv');
 
-// Load local .env first (project root)
-dotenv.config({ path: path.join(__dirname, '..', '..', '.env') });
-
-// Try to load from Auto Company root (parent directory)
-const parentEnv = path.join(__dirname, '..', '..', '..', '.env');
-if (fs.existsSync(parentEnv)) {
-  dotenv.config({ path: parentEnv, override: false });
+try {
+  const dotenv = require('dotenv');
+  dotenv.config({ path: path.join(__dirname, '..', '..', '.env') });
+  const parentEnv = path.join(__dirname, '..', '..', '..', '.env');
+  if (fs.existsSync(parentEnv)) dotenv.config({ path: parentEnv, override: false });
+} catch (_) {
+  // dotenv not available in production — env vars already injected
 }
 
 const express = require('express');
