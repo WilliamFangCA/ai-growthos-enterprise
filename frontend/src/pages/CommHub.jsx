@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 
 const PLATFORM_META = {
   line:      { label: 'LINE',      color: 'bg-green-500',  text: 'text-green-600',  icon: '💬' },
@@ -8,6 +8,14 @@ const PLATFORM_META = {
   instagram: { label: 'Instagram', color: 'bg-pink-500',   text: 'text-pink-600',   icon: '📸' },
   email:     { label: 'Email',     color: 'bg-orange-500', text: 'text-orange-600', icon: '📧' },
   wechat:    { label: 'WeChat',    color: 'bg-lime-500',   text: 'text-lime-600',   icon: '💚' },
+};
+
+const SKIPPED_LABEL = {
+  quiet_hours: '🌙 靜默時段（23:00-08:00）',
+  human_takeover: '👤 人工接管中',
+  no_matching_rule: '⚠️ 無匹配規則',
+  conversation_not_found: '❌ 對話不存在',
+  error: '❌ 引擎錯誤',
 };
 
 const STATUS_BADGE = {
@@ -42,12 +50,23 @@ export default function CommHub() {
   const [tab, setTab] = useState('inbox');
   const [showAddAccount, setShowAddAccount] = useState(false);
   const [newAccount, setNewAccount] = useState({ platform: 'line', account_name: '', channel_id: '' });
+  const [simForm, setSimForm] = useState({ platform: 'line', contact_name: '', message: '' });
+  const [simLoading, setSimLoading] = useState(false);
+  const [simResult, setSimResult] = useState(null);
+  const [refreshing, setRefreshing] = useState(false);
   const messagesEndRef = useRef(null);
 
   useEffect(() => { loadStats(); loadAccounts(); }, []);
   useEffect(() => { loadConvos(); }, [filterStatus, filterPlatform]);
   useEffect(() => { if (selected) loadMessages(selected.id); }, [selected]);
   useEffect(() => { messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [messages]);
+
+  // Auto-refresh every 15s when inbox is open
+  useEffect(() => {
+    if (tab !== 'inbox') return;
+    const t = setInterval(() => { loadStats(); loadConvos(); }, 15000);
+    return () => clearInterval(t);
+  }, [tab, filterStatus, filterPlatform]);
 
   async function loadStats() {
     try {
@@ -150,6 +169,33 @@ export default function CommHub() {
     loadAccounts();
   }
 
+  async function simulateWebhook() {
+    if (!simForm.contact_name || !simForm.message) return;
+    setSimLoading(true);
+    setSimResult(null);
+    try {
+      const r = await fetch('/api/comms/webhook/simulate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(simForm),
+      });
+      const data = await r.json();
+      setSimResult(data);
+      loadConvos();
+      loadStats();
+    } catch (e) {
+      setSimResult({ error: e.message });
+    } finally {
+      setSimLoading(false);
+    }
+  }
+
+  async function refreshAll() {
+    setRefreshing(true);
+    await Promise.all([loadStats(), loadConvos()]);
+    setRefreshing(false);
+  }
+
   const pm = (p) => PLATFORM_META[p] || { label: p, color: 'bg-gray-400', text: 'text-gray-600', icon: '💬' };
 
   return (
@@ -177,13 +223,17 @@ export default function CommHub() {
       </div>
 
       {/* Tabs */}
-      <div className="flex gap-1 mb-4 border-b border-gray-200">
-        {[['inbox','📬 統一收件匣'],['accounts','🔗 帳號管理']].map(([t, label]) => (
+      <div className="flex items-center gap-1 mb-4 border-b border-gray-200">
+        {[['inbox','📬 統一收件匣'],['simulate','⚡ 模擬測試'],['accounts','🔗 帳號管理']].map(([t, label]) => (
           <button key={t} onClick={() => setTab(t)}
             className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${tab === t ? 'border-blue-500 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700'}`}>
             {label}
           </button>
         ))}
+        <button onClick={refreshAll} title="刷新"
+          className={`ml-auto mb-1 p-1.5 rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors ${refreshing ? 'animate-spin' : ''}`}>
+          ↻
+        </button>
       </div>
 
       {tab === 'inbox' && (
@@ -209,7 +259,14 @@ export default function CommHub() {
             {/* List */}
             <div className="flex-1 overflow-y-auto divide-y divide-gray-50">
               {convos.length === 0 ? (
-                <div className="p-6 text-center text-gray-400 text-sm">暫無對話</div>
+                <div className="p-6 text-center text-gray-400 text-sm space-y-3">
+                  <div className="text-4xl">📭</div>
+                  <p>暫無對話</p>
+                  <button onClick={() => setTab('simulate')}
+                    className="text-xs px-3 py-1.5 bg-blue-100 text-blue-600 rounded-lg hover:bg-blue-200 transition-colors">
+                    ⚡ 模擬第一條訊息
+                  </button>
+                </div>
               ) : convos.map(c => (
                 <button key={c.id} onClick={() => setSelected(c)}
                   className={`w-full p-3 text-left hover:bg-blue-50 transition-colors ${selected?.id === c.id ? 'bg-blue-50 border-l-2 border-blue-500' : ''}`}>
@@ -282,24 +339,33 @@ export default function CommHub() {
 
                 {/* Messages */}
                 <div className="flex-1 overflow-y-auto p-4 space-y-3">
-                  {messages.map(msg => (
-                    <div key={msg.id} className={`flex ${msg.direction === 'outbound' ? 'justify-end' : 'justify-start'}`}>
-                      <div className={`max-w-[70%] rounded-2xl px-4 py-2.5 text-sm ${
-                        msg.direction === 'outbound'
-                          ? msg.sent_by === 'ai' ? 'bg-green-500 text-white' : 'bg-blue-500 text-white'
-                          : 'bg-gray-100 text-gray-800'
-                      }`}>
-                        {msg.direction === 'outbound' && (
-                          <div className="text-xs opacity-75 mb-1">{msg.sent_by === 'ai' ? '🤖 AI 回覆' : '👤 人工回覆'}</div>
-                        )}
-                        <p className="whitespace-pre-wrap">{msg.content}</p>
-                        <div className={`text-xs mt-1 ${msg.direction === 'outbound' ? 'opacity-70' : 'text-gray-400'}`}>
-                          {fmtTime(msg.sent_at)}
-                          {msg.quality_score && <span className="ml-2">★{msg.quality_score}</span>}
+                  {messages.map(msg => {
+                    if (msg.sent_by === 'system') return (
+                      <div key={msg.id} className="flex justify-center">
+                        <span className="text-xs px-3 py-1 bg-gray-100 text-gray-500 rounded-full">{msg.content}</span>
+                      </div>
+                    );
+                    return (
+                      <div key={msg.id} className={`flex ${msg.direction === 'outbound' ? 'justify-end' : 'justify-start'}`}>
+                        <div className={`max-w-[72%] rounded-2xl px-4 py-2.5 text-sm ${
+                          msg.direction === 'outbound'
+                            ? msg.sent_by === 'ai' ? 'bg-green-500 text-white' : 'bg-blue-500 text-white'
+                            : 'bg-gray-100 text-gray-800'
+                        }`}>
+                          {msg.direction === 'outbound' && (
+                            <div className="text-xs opacity-75 mb-1">
+                              {msg.sent_by === 'ai' ? `🤖 AI${msg.ai_node_type ? ` · ${msg.ai_node_type}` : ''}` : '👤 人工'}
+                            </div>
+                          )}
+                          <p className="whitespace-pre-wrap">{msg.content}</p>
+                          <div className={`text-xs mt-1 ${msg.direction === 'outbound' ? 'opacity-70' : 'text-gray-400'}`}>
+                            {fmtTime(msg.sent_at)}
+                            {msg.quality_score && <span className="ml-2">★{msg.quality_score}</span>}
+                          </div>
                         </div>
                       </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                   <div ref={messagesEndRef} />
                 </div>
 
@@ -328,6 +394,92 @@ export default function CommHub() {
                 </div>
               </>
             )}
+          </div>
+        </div>
+      )}
+
+      {tab === 'simulate' && (
+        <div className="flex-1 bg-white rounded-2xl shadow-sm border border-gray-100 p-6 max-w-2xl">
+          <h2 className="text-lg font-semibold text-gray-800 mb-1">模擬訊息接收</h2>
+          <p className="text-sm text-gray-500 mb-6">模擬一條平台訊息進入系統，觸發 AI Rules Engine 自動回覆</p>
+          <div className="space-y-4">
+            <div className="flex gap-3">
+              <div className="flex-1">
+                <label className="text-xs text-gray-500 mb-1 block">平台</label>
+                <select value={simForm.platform} onChange={e => setSimForm(p => ({ ...p, platform: e.target.value }))}
+                  className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300">
+                  {Object.entries(PLATFORM_META).map(([k, v]) => (
+                    <option key={k} value={k}>{v.icon} {v.label}</option>
+                  ))}
+                </select>
+              </div>
+              <div className="flex-1">
+                <label className="text-xs text-gray-500 mb-1 block">聯絡人名稱</label>
+                <input value={simForm.contact_name} onChange={e => setSimForm(p => ({ ...p, contact_name: e.target.value }))}
+                  placeholder="例：測試用戶A"
+                  className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300" />
+              </div>
+            </div>
+            <div>
+              <label className="text-xs text-gray-500 mb-1 block">訊息內容</label>
+              <textarea value={simForm.message} onChange={e => setSimForm(p => ({ ...p, message: e.target.value }))}
+                placeholder="例：你好，我想詢問你們的產品價格..."
+                rows={3}
+                className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-blue-300" />
+            </div>
+            <button onClick={simulateWebhook} disabled={simLoading || !simForm.contact_name || !simForm.message}
+              className="w-full py-2.5 bg-blue-600 text-white rounded-xl text-sm font-medium hover:bg-blue-700 transition-colors disabled:opacity-50">
+              {simLoading ? '⏳ 發送中...' : '⚡ 發送模擬訊息'}
+            </button>
+          </div>
+
+          {simResult && (
+            <div className={`mt-5 rounded-xl p-4 text-sm border ${simResult.error ? 'bg-red-50 border-red-200' : 'bg-green-50 border-green-200'}`}>
+              {simResult.error ? (
+                <p className="text-red-700">錯誤：{simResult.error}</p>
+              ) : (
+                <div className="space-y-2">
+                  <div className="flex items-center gap-2">
+                    <span className="font-medium text-green-800">✓ 訊息已接收</span>
+                    <span className="text-xs text-gray-500">對話 #{simResult.conversation_id}</span>
+                  </div>
+                  {simResult.aiReply ? (
+                    <div className="bg-white rounded-lg p-3 border border-green-200">
+                      <div className="text-xs text-gray-500 mb-1">
+                        🤖 AI 回覆 · 規則：{simResult.ruleMatched} · {simResult.source || 'mock'}
+                      </div>
+                      <p className="text-gray-800">{simResult.aiReply}</p>
+                    </div>
+                  ) : (
+                    <p className="text-orange-600 text-xs">
+                      {SKIPPED_LABEL[simResult.skipped] || `跳過：${simResult.skipped}`}
+                    </p>
+                  )}
+                  <button onClick={() => { setTab('inbox'); loadConvos(); }}
+                    className="text-xs text-blue-600 hover:underline">
+                    → 在收件匣查看對話
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Quick test presets */}
+          <div className="mt-6 pt-4 border-t border-gray-100">
+            <p className="text-xs text-gray-400 mb-3">快速測試情境</p>
+            <div className="flex flex-wrap gap-2">
+              {[
+                { label: '首次詢價', msg: '你好！我想了解一下你們有什麼產品可以推薦？' },
+                { label: '訂單查詢', msg: '我的訂單什麼時候出貨？' },
+                { label: '英文訊息', msg: 'Hi! I want to know more about your products.' },
+                { label: '售後問題', msg: '收到的商品有瑕疵，可以退換嗎？' },
+              ].map(p => (
+                <button key={p.label} onClick={() => setSimForm(s => ({ ...s, message: p.msg }))}
+                  className="text-xs px-3 py-1.5 bg-gray-100 text-gray-600 rounded-lg hover:bg-gray-200 transition-colors">
+                  {p.label}
+                </button>
+              ))}
+            </div>
           </div>
         </div>
       )}

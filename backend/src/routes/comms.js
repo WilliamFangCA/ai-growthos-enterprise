@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
-const { run, get, all } = require('../db');
+const { run, get, all, getDb } = require('../db');
+const db = { transaction: (fn) => getDb().transaction(fn) };
 const { callAI } = require('../aiRouter');
 
 // GET /api/comms/accounts
@@ -101,10 +102,166 @@ router.post('/messages/ai-reply', async (req, res) => {
 router.put('/conversations/:id/assign', (req, res) => {
   const { assigned_to, status } = req.body;
   try {
-    if (assigned_to !== undefined) run('UPDATE conversations SET assigned_to = ? WHERE id = ?', [assigned_to, req.params.id]);
+    if (assigned_to !== undefined) {
+      if (assigned_to === 'human') {
+        run('UPDATE conversations SET assigned_to = ?, human_takeover_at = CURRENT_TIMESTAMP WHERE id = ?', [assigned_to, req.params.id]);
+        run('INSERT INTO messages (conversation_id, direction, content, message_type, sent_by, ai_node_type) VALUES (?,?,?,?,?,?)',
+          [req.params.id, 'outbound', '👤 已由人工客服接管', 'text', 'system', 'system']);
+      } else if (assigned_to === 'ai') {
+        run('UPDATE conversations SET assigned_to = ?, human_takeover_at = NULL WHERE id = ?', [assigned_to, req.params.id]);
+        run('INSERT INTO messages (conversation_id, direction, content, message_type, sent_by, ai_node_type) VALUES (?,?,?,?,?,?)',
+          [req.params.id, 'outbound', '🤖 已交還 AI 管理', 'text', 'system', 'system']);
+      } else {
+        run('UPDATE conversations SET assigned_to = ? WHERE id = ?', [assigned_to, req.params.id]);
+      }
+    }
     if (status !== undefined) run('UPDATE conversations SET status = ? WHERE id = ?', [status, req.params.id]);
     const convo = get('SELECT * FROM conversations WHERE id = ?', [req.params.id]);
     res.json(convo);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── AI Rules Engine ──────────────────────────────────────────────────────────
+async function runAIRulesEngine(conversationId, platform, inboundMessage) {
+  try {
+    const convo = get('SELECT * FROM conversations WHERE id = ?', [conversationId]);
+    if (!convo) return { aiReply: null, ruleMatched: null, skipped: 'conversation_not_found' };
+
+    // 若人工接管中，且未超過 6 小時，跳過
+    if (convo.assigned_to !== 'ai') {
+      if (convo.human_takeover_at) {
+        const takeover = new Date(convo.human_takeover_at);
+        const sixHoursMs = 6 * 60 * 60 * 1000;
+        if (Date.now() - takeover.getTime() < sixHoursMs) {
+          return { aiReply: null, ruleMatched: null, skipped: 'human_takeover' };
+        }
+        // 超過 6 小時，自動交還 AI
+        run('UPDATE conversations SET assigned_to = ?, human_takeover_at = NULL WHERE id = ?', ['ai', conversationId]);
+        run('INSERT INTO messages (conversation_id, direction, content, message_type, sent_by, ai_node_type) VALUES (?,?,?,?,?,?)',
+          [conversationId, 'outbound', '🤖 已交還 AI 管理（超過 6 小時自動恢復）', 'text', 'system', 'system']);
+      } else {
+        return { aiReply: null, ruleMatched: null, skipped: 'human_takeover' };
+      }
+    }
+
+    // 台北時間靜默時段判斷 23:00–08:00（用 en-US locale 確保純數字輸出）
+    const taipeiDate = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Taipei' }));
+    const taipeiHour = taipeiDate.getHours();
+    if (taipeiHour >= 23 || taipeiHour < 8) {
+      return { aiReply: null, ruleMatched: null, skipped: 'quiet_hours' };
+    }
+
+    // 判斷是否首次訊息（acquisition）
+    const msgCount = get('SELECT COUNT(*) as c FROM messages WHERE conversation_id = ?', [conversationId]).c;
+    const isFirstContact = msgCount <= 1;
+
+    // 取出所有 is_active=1 的規則
+    const rules = all('SELECT * FROM ai_reply_rules WHERE is_active = 1 ORDER BY id ASC');
+
+    // 篩選規則：acquisition 優先，service 作 fallback
+    let matchedRule = null;
+    if (isFirstContact) {
+      matchedRule = rules.find(r => r.trigger_type === 'acquisition');
+    }
+    if (!matchedRule) {
+      matchedRule = rules.find(r => r.trigger_type === 'service');
+    }
+
+    if (!matchedRule) {
+      return { aiReply: null, ruleMatched: null, skipped: 'no_matching_rule' };
+    }
+
+    // 填入 template 變數
+    const contactName = convo.contact_name || '用戶';
+    let prompt = matchedRule.reply_template
+      .replace(/\{name\}/g, contactName)
+      .replace(/\{brand\}/g, 'AI GrowthOS');
+
+    const systemPrompt = '你是一個專業 AI 客服，代表品牌回覆客戶。回覆要簡短親切，使用與客戶相同的語言。';
+
+    const aiResult = await callAI(
+      `客戶訊息：${inboundMessage}\n\n請根據以下回覆範本生成最終回覆：${prompt}`,
+      systemPrompt,
+      { model: 'glm-5-turbo', maxTokens: 300 }
+    );
+
+    const aiReply = aiResult.content;
+
+    // 插入 outbound message
+    run('INSERT INTO messages (conversation_id, direction, content, message_type, sent_by, ai_node_type) VALUES (?,?,?,?,?,?)',
+      [conversationId, 'outbound', aiReply, 'text', 'ai', matchedRule.trigger_type]);
+
+    // 更新 conversation.last_message
+    run('UPDATE conversations SET last_message = ?, last_message_at = CURRENT_TIMESTAMP WHERE id = ?',
+      [aiReply, conversationId]);
+
+    // 更新 fire_count
+    run('UPDATE ai_reply_rules SET fire_count = fire_count + 1 WHERE id = ?', [matchedRule.id]);
+
+    return {
+      aiReply,
+      ruleMatched: matchedRule.name,
+      ruleType: matchedRule.trigger_type,
+      model: aiResult.model,
+      source: aiResult.source,
+      skipped: null,
+    };
+  } catch (err) {
+    console.error('[runAIRulesEngine] error:', err.message);
+    return { aiReply: null, ruleMatched: null, skipped: 'error', error: err.message };
+  }
+}
+
+// POST /api/comms/webhook/simulate
+router.post('/webhook/simulate', async (req, res) => {
+  const { platform = 'line', contact_name, message } = req.body;
+  if (!contact_name || !message) {
+    return res.status(400).json({ error: 'contact_name and message required' });
+  }
+  try {
+    // 找到或建立 conversation（用 SQLite transaction 避免並發競態）
+    let convo = db.transaction(() => {
+      let existing = get(
+        'SELECT * FROM conversations WHERE platform = ? AND contact_name = ? AND status = ? ORDER BY created_at DESC LIMIT 1',
+        [platform, contact_name, 'open']
+      );
+      if (!existing) {
+        run(
+          'INSERT INTO conversations (platform, contact_name, channel_user_id, last_message, assigned_to, status, unread_count) VALUES (?,?,?,?,?,?,?)',
+          [platform, contact_name, `sim_${Date.now()}`, message, 'ai', 'open', 0]
+        );
+        existing = get('SELECT * FROM conversations WHERE id = last_insert_rowid()');
+      }
+      return existing;
+    })();
+
+    const conversationId = convo.id;
+
+    // 插入 inbound message
+    run(
+      'INSERT INTO messages (conversation_id, direction, content, message_type, sent_by) VALUES (?,?,?,?,?)',
+      [conversationId, 'inbound', message, 'text', 'human']
+    );
+
+    // 更新 unread_count + last_message
+    run(
+      'UPDATE conversations SET unread_count = unread_count + 1, last_message = ?, last_message_at = CURRENT_TIMESTAMP WHERE id = ?',
+      [message, conversationId]
+    );
+
+    // 觸發 AI Rules Engine
+    const engineResult = await runAIRulesEngine(conversationId, platform, message);
+
+    res.json({
+      conversation_id: conversationId,
+      aiReply: engineResult.aiReply,
+      model: engineResult.model || null,
+      source: engineResult.source || null,
+      ruleMatched: engineResult.ruleMatched || null,
+      skipped: engineResult.skipped || null,
+    });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

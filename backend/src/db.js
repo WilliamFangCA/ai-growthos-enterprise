@@ -28,6 +28,7 @@ function initTables() {
   exec(`
     CREATE TABLE IF NOT EXISTS contacts (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
+      tenant_id TEXT NOT NULL DEFAULT 'demo',
       name TEXT NOT NULL,
       email TEXT,
       phone TEXT,
@@ -40,6 +41,7 @@ function initTables() {
 
     CREATE TABLE IF NOT EXISTS workflows (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
+      tenant_id TEXT NOT NULL DEFAULT 'demo',
       name TEXT NOT NULL,
       trigger_type TEXT NOT NULL,
       actions_json TEXT DEFAULT '[]',
@@ -87,6 +89,7 @@ function initTables() {
 
     CREATE TABLE IF NOT EXISTS conversations (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
+      tenant_id TEXT NOT NULL DEFAULT 'demo',
       platform TEXT NOT NULL,
       comm_account_id INTEGER,
       contact_name TEXT,
@@ -95,6 +98,7 @@ function initTables() {
       last_message TEXT,
       last_message_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       assigned_to TEXT DEFAULT 'ai',
+      human_takeover_at DATETIME,
       status TEXT DEFAULT 'open',
       unread_count INTEGER DEFAULT 0,
       tags TEXT DEFAULT '',
@@ -103,6 +107,7 @@ function initTables() {
 
     CREATE TABLE IF NOT EXISTS messages (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
+      tenant_id TEXT NOT NULL DEFAULT 'demo',
       conversation_id INTEGER NOT NULL,
       direction TEXT NOT NULL,
       content TEXT,
@@ -115,6 +120,7 @@ function initTables() {
 
     CREATE TABLE IF NOT EXISTS ai_reply_rules (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
+      tenant_id TEXT NOT NULL DEFAULT 'demo',
       name TEXT NOT NULL,
       trigger_type TEXT NOT NULL,
       trigger_condition TEXT DEFAULT '{}',
@@ -131,6 +137,7 @@ function initTables() {
 
     CREATE TABLE IF NOT EXISTS orders (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
+      tenant_id TEXT NOT NULL DEFAULT 'demo',
       platform TEXT NOT NULL,
       platform_order_id TEXT,
       contact_name TEXT,
@@ -163,6 +170,7 @@ function initTables() {
 
     CREATE TABLE IF NOT EXISTS members (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
+      tenant_id TEXT NOT NULL DEFAULT 'demo',
       contact_id INTEGER,
       contact_name TEXT,
       level TEXT DEFAULT 'member',
@@ -186,6 +194,7 @@ function initTables() {
 
     CREATE TABLE IF NOT EXISTS campaigns (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
+      tenant_id TEXT NOT NULL DEFAULT 'demo',
       name TEXT NOT NULL,
       type TEXT NOT NULL,
       status TEXT DEFAULT 'draft',
@@ -205,6 +214,7 @@ function initTables() {
 
     CREATE TABLE IF NOT EXISTS email_sequences (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
+      tenant_id TEXT NOT NULL DEFAULT 'demo',
       campaign_id INTEGER,
       step_number INTEGER DEFAULT 1,
       subject TEXT,
@@ -219,6 +229,7 @@ function initTables() {
 
     CREATE TABLE IF NOT EXISTS loyalty_transactions (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
+      tenant_id TEXT NOT NULL DEFAULT 'demo',
       member_id INTEGER,
       contact_name TEXT,
       type TEXT NOT NULL,
