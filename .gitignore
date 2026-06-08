@@ -1,6 +1,8 @@
 node_modules/
-dist/
 .env
+# frontend/dist is committed for Railway deployment (no build step needed)
+backend/dist/
+worker/dist/
 backend/data/*.db
 backend/data/*.db-shm
 backend/data/*.db-wal
