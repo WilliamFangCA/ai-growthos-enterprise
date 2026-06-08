@@ -300,11 +300,150 @@ function InvokeModal({ agent, onClose }) {
   );
 }
 
+// ─── Create Agent Modal ──────────────────────────────────────────────────────
+function CreateAgentModal({ onClose, onCreated }) {
+  const [form, setForm] = useState({
+    role: '', persona: '', layer: 'Strategy',
+    description: '', systemPrompt: '',
+  });
+  const [saving, setSaving] = useState(false);
+  const [err, setErr] = useState('');
+
+  const set = (k, v) => setForm(p => ({ ...p, [k]: v }));
+
+  async function handleSave() {
+    if (!form.role.trim() || !form.persona.trim()) {
+      setErr('角色名稱和思維框架為必填');
+      return;
+    }
+    setSaving(true); setErr('');
+    try {
+      const res = await fetch('/api/agents/custom', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(form),
+      });
+      const data = await res.json();
+      if (data.error) throw new Error(data.error);
+      onCreated();
+      onClose();
+    } catch (e) {
+      setErr(e.message);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  const inputStyle = {
+    width: '100%', background: '#0f1117', border: '1px solid #2a2d3e',
+    borderRadius: 8, padding: '9px 12px', color: '#f9fafb', fontSize: 13,
+    outline: 'none', fontFamily: 'inherit', boxSizing: 'border-box',
+  };
+  const labelStyle = { fontSize: 12, color: '#9ca3af', display: 'block', marginBottom: 5 };
+
+  return (
+    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.75)', zIndex: 1000,
+      display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}
+      onClick={e => e.target === e.currentTarget && onClose()}>
+      <div className="fade-in" style={{ background: '#1a1d2e', border: '1px solid #2a2d3e', borderRadius: 16,
+        padding: 28, width: '100%', maxWidth: 560, maxHeight: '90vh', overflowY: 'auto' }}>
+
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
+          <div>
+            <h2 style={{ fontSize: 18, fontWeight: 700, color: '#f9fafb', margin: 0 }}>建立新 AI 智能體</h2>
+            <p style={{ fontSize: 12, color: '#6b7280', margin: '4px 0 0' }}>定義角色、思維框架與專業領域</p>
+          </div>
+          <button onClick={onClose} style={{ background: 'none', border: 'none', color: '#6b7280', fontSize: 22, cursor: 'pointer' }}>×</button>
+        </div>
+
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+            <div>
+              <label style={labelStyle}>角色名稱 *</label>
+              <input value={form.role} onChange={e => set('role', e.target.value)}
+                placeholder="例：Financial Analyst" style={inputStyle}
+                onFocus={e => (e.target.style.borderColor = '#3b82f6')}
+                onBlur={e => (e.target.style.borderColor = '#2a2d3e')} />
+            </div>
+            <div>
+              <label style={labelStyle}>思維框架 *</label>
+              <input value={form.persona} onChange={e => set('persona', e.target.value)}
+                placeholder="例：Warren Buffett" style={inputStyle}
+                onFocus={e => (e.target.style.borderColor = '#3b82f6')}
+                onBlur={e => (e.target.style.borderColor = '#2a2d3e')} />
+            </div>
+          </div>
+
+          <div>
+            <label style={labelStyle}>所屬類別</label>
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+              {Object.entries(LAYER_COLORS).map(([layer, c]) => (
+                <button key={layer} onClick={() => set('layer', layer)}
+                  style={{
+                    padding: '4px 12px', borderRadius: 20, fontSize: 11, fontWeight: 600,
+                    cursor: 'pointer', letterSpacing: '0.04em', transition: 'all 0.15s',
+                    background: form.layer === layer ? c.bg : 'transparent',
+                    border: `1px solid ${form.layer === layer ? c.border : '#2a2d3e'}`,
+                    color: form.layer === layer ? c.text : '#6b7280',
+                  }}>
+                  {layer.toUpperCase()}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div>
+            <label style={labelStyle}>角色描述</label>
+            <textarea value={form.description} onChange={e => set('description', e.target.value)}
+              placeholder="描述這個 Agent 的專長和適用場景..." rows={2}
+              style={{ ...inputStyle, resize: 'vertical' }}
+              onFocus={e => (e.target.style.borderColor = '#3b82f6')}
+              onBlur={e => (e.target.style.borderColor = '#2a2d3e')} />
+          </div>
+
+          <div>
+            <label style={labelStyle}>系統 Prompt（定義 AI 行為）</label>
+            <textarea value={form.systemPrompt} onChange={e => set('systemPrompt', e.target.value)}
+              placeholder={`你是一位資深 ${form.role || '專家'}，擅長...\n你的思維方式...\n在回答問題時，你會...`}
+              rows={4}
+              style={{ ...inputStyle, resize: 'vertical', lineHeight: 1.6 }}
+              onFocus={e => (e.target.style.borderColor = '#3b82f6')}
+              onBlur={e => (e.target.style.borderColor = '#2a2d3e')} />
+          </div>
+
+          {err && (
+            <div style={{ fontSize: 12, color: '#f87171', padding: '8px 12px', borderRadius: 7,
+              background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.2)' }}>
+              {err}
+            </div>
+          )}
+
+          <div style={{ display: 'flex', gap: 10, marginTop: 4 }}>
+            <button onClick={onClose}
+              style={{ flex: 1, padding: '9px', borderRadius: 8, border: '1px solid #2a2d3e',
+                background: 'transparent', color: '#9ca3af', fontSize: 13, cursor: 'pointer' }}>
+              取消
+            </button>
+            <button onClick={handleSave} disabled={saving}
+              style={{ flex: 2, padding: '9px', borderRadius: 8, border: 'none', fontSize: 13, fontWeight: 600,
+                background: saving ? '#2a2d3e' : 'linear-gradient(90deg, #3b82f6, #8b5cf6)',
+                color: saving ? '#6b7280' : '#fff', cursor: saving ? 'not-allowed' : 'pointer',
+                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
+              {saving ? <><div className="spinner" style={{ width: 14, height: 14, borderColor: '#4b5563', borderTopColor: '#9ca3af' }} />建立中...</> : '✦ 建立智能體'}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function AgentCenter() {
   const [agents, setAgents] = useState([]);
   const [loading, setLoading] = useState(true);
   const [fetchError, setFetchError] = useState('');
   const [activeAgent, setActiveAgent] = useState(null);
+  const [showCreate, setShowCreate] = useState(false);
   const { selectedModel, AVAILABLE_MODELS } = useModelSettings();
 
   const currentModelInfo = AVAILABLE_MODELS.find(m => m.id === selectedModel);
@@ -373,10 +512,42 @@ export default function AgentCenter() {
           {agents.map(agent => (
             <AgentCard key={agent.id} agent={agent} onInvoke={setActiveAgent} />
           ))}
+          {/* Create New Agent card */}
+          <div
+            onClick={() => setShowCreate(true)}
+            onMouseEnter={e => {
+              e.currentTarget.style.borderColor = '#3b82f6';
+              e.currentTarget.style.background = 'rgba(59,130,246,0.04)';
+            }}
+            onMouseLeave={e => {
+              e.currentTarget.style.borderColor = '#2a2d3e';
+              e.currentTarget.style.background = 'transparent';
+            }}
+            style={{
+              background: 'transparent',
+              border: '1.5px dashed #2a2d3e',
+              borderRadius: 12, padding: '18px 20px',
+              display: 'flex', flexDirection: 'column',
+              alignItems: 'center', justifyContent: 'center',
+              gap: 12, cursor: 'pointer', transition: 'all 0.15s',
+              minHeight: 180,
+            }}>
+            <div style={{
+              width: 44, height: 44, borderRadius: '50%',
+              background: 'rgba(59,130,246,0.1)', border: '1.5px dashed rgba(59,130,246,0.4)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              fontSize: 22, color: '#3b82f6',
+            }}>+</div>
+            <div style={{ textAlign: 'center' }}>
+              <div style={{ fontSize: 14, fontWeight: 600, color: '#9ca3af' }}>建立新智能體</div>
+              <div style={{ fontSize: 11, color: '#4b5563', marginTop: 4 }}>自訂角色 · 思維框架 · 專業領域</div>
+            </div>
+          </div>
         </div>
       )}
 
       {activeAgent && <InvokeModal agent={activeAgent} onClose={() => setActiveAgent(null)} />}
+      {showCreate && <CreateAgentModal onClose={() => setShowCreate(false)} onCreated={loadAgents} />}
     </div>
   );
 }
