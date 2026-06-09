@@ -43,11 +43,22 @@ function initTables() {
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       tenant_id TEXT NOT NULL DEFAULT 'demo',
       name TEXT NOT NULL,
+      category TEXT DEFAULT 'general',
+      description TEXT DEFAULT '',
       trigger_type TEXT NOT NULL,
       actions_json TEXT DEFAULT '[]',
       status TEXT DEFAULT 'active',
       run_count INTEGER DEFAULT 0,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+
+    CREATE TABLE IF NOT EXISTS workflow_run_logs (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      workflow_id INTEGER NOT NULL,
+      workflow_name TEXT,
+      category TEXT DEFAULT 'general',
+      status TEXT DEFAULT 'success',
+      executed_at DATETIME DEFAULT CURRENT_TIMESTAMP
     );
 
     CREATE TABLE IF NOT EXISTS content_history (
@@ -240,6 +251,9 @@ function initTables() {
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP
     );
   `);
+  // Migrations for existing DBs that predate these columns
+  try { exec(`ALTER TABLE workflows ADD COLUMN category TEXT DEFAULT 'general'`); } catch (_) {}
+  try { exec(`ALTER TABLE workflows ADD COLUMN description TEXT DEFAULT ''`); } catch (_) {}
 }
 
 function seedDemoData() {
@@ -266,33 +280,157 @@ function seedDemoData() {
 
   exec(`DELETE FROM workflows`);
   exec(`DELETE FROM sqlite_sequence WHERE name='workflows'`);
-  const workflows = [
-    ['Welcome Email Sequence', 'user_signup',
+  // 14 comprehensive workflows covering full AARRR + comms/order funnel
+  const workflows14 = [
+    // === 獲客 Acquisition ===
+    ['LINE 加好友歡迎流程', 'acquisition', '用戶加入LINE官方帳號時，自動發送個性化歡迎訊息並建立CRM記錄，開啟用戶旅程', 'webhook',
       JSON.stringify([
-        { type: 'send_email', template: 'welcome', delay: 0 },
-        { type: 'send_email', template: 'onboarding_day3', delay: 3 },
-        { type: 'send_email', template: 'feature_highlight', delay: 7 },
-      ]),
-      'active', 234],
-    ['Churn Risk Alert', 'ai_trigger',
+        { type: 'ai_reply', template: 'line_welcome', node: 'acquisition' },
+        { type: 'tag_contact', tag: 'line_follower' },
+        { type: 'update_crm', field: 'lifecycle_stage', value: 'new' },
+        { type: 'track_conversion', window: 7 },
+      ]), 'active', 892],
+    ['廣告點擊轉化追蹤', 'acquisition', '追蹤廣告點擊到LINE加好友的完整轉化路徑，自動分配來源標籤並推送對應優惠', 'webhook',
       JSON.stringify([
-        { type: 'tag_contact', tag: 'at_risk' },
+        { type: 'tag_contact', tag: 'from_ad' },
+        { type: 'segment_filter', condition: 'ad_source_attribution' },
+        { type: 'send_line_message', template: 'ad_landing_offer' },
+        { type: 'track_conversion', window: 3 },
+      ]), 'active', 456],
+    // === 激活 Activation ===
+    ['新用戶 7 天激活序列', 'activation', '新用戶加入後7天內，每天推送個性化激活內容，引導完成首次購買轉化', 'user_signup',
+      JSON.stringify([
+        { type: 'send_email', template: 'D0_welcome', delay: 0 },
+        { type: 'send_line_message', template: 'D3_feature_intro', delay: 3 },
+        { type: 'send_email', template: 'D5_offer', delay: 5 },
+        { type: 'send_line_message', template: 'D7_activation_complete', delay: 7 },
+        { type: 'track_conversion', window: 3 },
+      ]), 'active', 387],
+    ['首次購買引導流程', 'activation', '偵測高意向用戶瀏覽行為，在關鍵時刻推送個性化商品推薦和限時優惠', 'ai_trigger',
+      JSON.stringify([
+        { type: 'ai_analyze', task: 'purchase_intent_score' },
+        { type: 'segment_filter', condition: 'high_intent_users' },
+        { type: 'send_line_message', template: 'product_recommendation' },
+        { type: 'tag_contact', tag: 'high_intent' },
+        { type: 'track_conversion', window: 2 },
+      ]), 'active', 234],
+    // === 留存 Retention ===
+    ['流失預警喚回流程', 'retention', '當AI預測流失機率>60%時，立即啟動多渠道喚回序列和客服跟進任務', 'ai_trigger',
+      JSON.stringify([
+        { type: 'tag_contact', tag: 'churn_risk' },
         { type: 'notify_slack', channel: '#cs-alerts' },
         { type: 'create_task', assignee: 'cs_team', priority: 'high' },
-      ]),
-      'active', 89],
-    ['Monthly Re-engagement', 'scheduled',
+        { type: 'send_email', template: 'winback_offer' },
+        { type: 'send_line_message', template: 'winback_personal' },
+        { type: 'track_conversion', window: 14 },
+      ]), 'active', 156],
+    ['沉默用戶喚醒 (14天)', 'retention', '14天未互動的用戶，每日自動觸發個性化喚醒訊息，重建品牌連結', 'scheduled',
       JSON.stringify([
-        { type: 'segment_filter', condition: 'inactive_30d' },
-        { type: 'send_email', template: 'reengagement_offer', delay: 0 },
+        { type: 'segment_filter', condition: 'inactive_14d' },
+        { type: 'ai_analyze', task: 'best_reengagement_message' },
+        { type: 'send_line_message', template: 'reengagement_personal' },
         { type: 'track_conversion', window: 7 },
-      ]),
-      'paused', 45],
+      ]), 'active', 89],
+    ['VIP 生日禮遇自動化', 'retention', '每日檢查今日生日會員，自動發送個性化生日祝賀、積分禮品和專屬優惠', 'scheduled',
+      JSON.stringify([
+        { type: 'segment_filter', condition: 'birthday_today' },
+        { type: 'add_points', amount: 500, reason: '生日積分' },
+        { type: 'send_line_message', template: 'birthday_greeting' },
+        { type: 'send_email', template: 'birthday_gift' },
+      ]), 'active', 67],
+    // === 收入 Revenue ===
+    ['放棄購物車追回', 'revenue', '用戶加購後1小時未結帳，啟動多波段追回序列，附上限時折扣提升轉化率', 'webhook',
+      JSON.stringify([
+        { type: 'segment_filter', condition: 'cart_value_over_500' },
+        { type: 'send_line_message', template: 'cart_reminder_1h', delay: 1 },
+        { type: 'send_email', template: 'cart_reminder_24h', delay: 24 },
+        { type: 'send_line_message', template: 'cart_last_chance_48h', delay: 48 },
+        { type: 'track_conversion', window: 3 },
+      ]), 'active', 312],
+    ['VIP 升級觸發通知', 'revenue', '積分或消費達到升級門檻時，立即升級會員等級並推送個性化祝賀和專屬福利說明', 'ai_trigger',
+      JSON.stringify([
+        { type: 'update_member_level', target: 'auto_upgrade' },
+        { type: 'add_points', amount: 1000, reason: 'VIP升級獎勵' },
+        { type: 'send_line_message', template: 'vip_upgrade_congrats' },
+        { type: 'send_email', template: 'vip_benefits_guide' },
+        { type: 'notify_slack', channel: '#vip-alerts' },
+      ]), 'active', 67],
+    ['交叉銷售 AI 推薦', 'revenue', '訂單完成後，AI分析購買模式，自動推薦最相關的配套商品，提升客單價', 'webhook',
+      JSON.stringify([
+        { type: 'ai_analyze', task: 'cross_sell_recommendation' },
+        { type: 'segment_filter', condition: 'repeat_purchase_potential' },
+        { type: 'send_line_message', template: 'product_cross_sell' },
+        { type: 'track_conversion', window: 7 },
+      ]), 'active', 198],
+    // === 裂變 Referral ===
+    ['社群裂變任務觸發', 'referral', '購買完成後邀請滿意用戶分享商品，給予積分獎勵，激活口碑裂變循環', 'webhook',
+      JSON.stringify([
+        { type: 'segment_filter', condition: 'satisfied_purchaser' },
+        { type: 'send_line_message', template: 'referral_invite_task' },
+        { type: 'add_points', amount: 200, reason: '分享任務獎勵' },
+        { type: 'track_conversion', window: 7 },
+      ]), 'active', 43],
+    ['好友邀請成功獎勵', 'referral', '被邀請好友首次購買後，自動給予邀請人和被邀請人雙向積分獎勵，強化裂變動機', 'webhook',
+      JSON.stringify([
+        { type: 'tag_contact', tag: 'referred_user' },
+        { type: 'add_points', amount: 300, reason: '邀請成功獎勵' },
+        { type: 'send_line_message', template: 'referral_success' },
+        { type: 'update_crm', field: 'referral_source', value: 'friend_invite' },
+      ]), 'active', 28],
+    // === 訂單 Order ===
+    ['訂單狀態全程自動通知', 'order', '訂單每個狀態變更時，自動透過用戶偏好渠道推播通知，零人工介入', 'webhook',
+      JSON.stringify([
+        { type: 'ai_analyze', task: 'preferred_channel' },
+        { type: 'send_notification', channel: 'auto', template: 'order_status_update' },
+        { type: 'update_crm', field: 'last_order_status', value: 'updated' },
+      ]), 'active', 1203],
+    // === 通訊 Comms ===
+    ['AI 客服智能分派流程', 'comms', 'AI優先接待所有客服訊息，自動分析複雜度並升級人工，保障90%問題30秒內得到回應', 'webhook',
+      JSON.stringify([
+        { type: 'ai_reply', template: 'ai_first_response', node: 'service' },
+        { type: 'ai_analyze', task: 'message_complexity' },
+        { type: 'condition_check', condition: 'needs_human_escalation' },
+        { type: 'create_task', assignee: 'cs_team', priority: 'normal' },
+      ]), 'active', 3421],
   ];
-  workflows.forEach(([name, trigger, actions, status, runCount]) => {
-    run(`INSERT INTO workflows (name, trigger_type, actions_json, status, run_count) VALUES (?,?,?,?,?)`,
-      [name, trigger, actions, status, runCount]);
+  workflows14.forEach(([name, cat, desc, trigger, actions, status, runCount]) => {
+    run(`INSERT INTO workflows (name, category, description, trigger_type, actions_json, status, run_count) VALUES (?,?,?,?,?,?,?)`,
+      [name, cat, desc, trigger, actions, status, runCount]);
   });
+
+  // Seed workflow_run_logs: 7-day historical run data
+  exec(`DELETE FROM workflow_run_logs`);
+  try { exec(`DELETE FROM sqlite_sequence WHERE name='workflow_run_logs'`); } catch (_) {}
+  const wfRunMeta = [
+    [1, 'LINE 加好友歡迎流程', 'acquisition', 892],
+    [2, '廣告點擊轉化追蹤', 'acquisition', 456],
+    [3, '新用戶 7 天激活序列', 'activation', 387],
+    [4, '首次購買引導流程', 'activation', 234],
+    [5, '流失預警喚回流程', 'retention', 156],
+    [6, '沉默用戶喚醒 (14天)', 'retention', 89],
+    [7, 'VIP 生日禮遇自動化', 'retention', 67],
+    [8, '放棄購物車追回', 'revenue', 312],
+    [9, 'VIP 升級觸發通知', 'revenue', 67],
+    [10, '交叉銷售 AI 推薦', 'revenue', 198],
+    [11, '社群裂變任務觸發', 'referral', 43],
+    [12, '好友邀請成功獎勵', 'referral', 28],
+    [13, '訂單狀態全程自動通知', 'order', 1203],
+    [14, 'AI 客服智能分派流程', 'comms', 3421],
+  ];
+  const baseWeeklyFraction = 0.18; // ~18% of total runs happened in last 7 days
+  for (const [wfId, wfName, cat, totalRuns] of wfRunMeta) {
+    const weeklyRuns = Math.max(7, Math.round(totalRuns * baseWeeklyFraction));
+    const dailyBase = Math.ceil(weeklyRuns / 7);
+    for (let dayOffset = 6; dayOffset >= 0; dayOffset--) {
+      const dayVariation = [0.7, 0.85, 1.0, 1.2, 0.9, 1.1, 0.95][dayOffset] || 1.0;
+      const dayRuns = Math.max(1, Math.round(dailyBase * dayVariation));
+      for (let r = 0; r < dayRuns; r++) {
+        const ts = new Date(Date.now() - dayOffset * 86400000 - r * 3600000);
+        run(`INSERT INTO workflow_run_logs (workflow_id, workflow_name, category, status, executed_at) VALUES (?,?,?,?,?)`,
+          [wfId, wfName, cat, 'success', ts.toISOString()]);
+      }
+    }
+  }
 
   exec(`DELETE FROM content_history`);
   exec(`DELETE FROM sqlite_sequence WHERE name='content_history'`);

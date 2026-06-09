@@ -124,4 +124,90 @@ router.get('/aarrr', (req, res) => {
   }
 });
 
+// GET /api/analytics/workflows
+router.get('/workflows', (req, res) => {
+  try {
+    // Per-category breakdown
+    const byCategory = all(`
+      SELECT category, COUNT(*) as count,
+             SUM(run_count) as total_runs,
+             SUM(CASE WHEN status='active' THEN 1 ELSE 0 END) as active_count
+      FROM workflows
+      WHERE category IS NOT NULL
+      GROUP BY category
+      ORDER BY total_runs DESC
+    `);
+
+    const CATEGORY_LABELS = {
+      acquisition: '獲客', activation: '激活', retention: '留存',
+      revenue: '收入', referral: '裂變', order: '訂單', comms: '通訊', general: '一般',
+    };
+    const categorized = byCategory.map(c => ({
+      ...c,
+      label: CATEGORY_LABELS[c.category] || c.category,
+    }));
+
+    // Top 8 workflows by run_count
+    const topWorkflows = all(`
+      SELECT id, name, category, run_count, status, description
+      FROM workflows
+      ORDER BY run_count DESC
+      LIMIT 8
+    `);
+
+    // 7-day daily run trend from workflow_run_logs
+    const rawTrend = all(`
+      SELECT DATE(executed_at) as date, COUNT(*) as runs
+      FROM workflow_run_logs
+      WHERE executed_at >= DATE('now', '-7 days')
+      GROUP BY DATE(executed_at)
+      ORDER BY date ASC
+    `);
+    const trendMap = {};
+    rawTrend.forEach(d => { trendMap[d.date] = d.runs; });
+    const trend7d = [];
+    for (let i = 6; i >= 0; i--) {
+      const d = new Date();
+      d.setDate(d.getDate() - i);
+      const key = d.toISOString().split('T')[0];
+      trend7d.push({ date: key, runs: trendMap[key] || 0 });
+    }
+
+    // AARRR attribution — map categories to funnel stages
+    const AARRR_MAP = {
+      acquisition: 'Acquisition', activation: 'Activation',
+      retention: 'Retention', revenue: 'Revenue', referral: 'Referral',
+      order: 'Revenue', comms: 'Retention', general: 'Retention',
+    };
+    const aarrrAcc = {};
+    byCategory.forEach(c => {
+      const stage = AARRR_MAP[c.category] || 'Retention';
+      aarrrAcc[stage] = (aarrrAcc[stage] || 0) + Number(c.total_runs || 0);
+    });
+    const AARRR_ORDER = ['Acquisition', 'Activation', 'Retention', 'Revenue', 'Referral'];
+    const aarrrAttribution = AARRR_ORDER
+      .filter(s => aarrrAcc[s])
+      .map(s => ({ stage: s, runs: aarrrAcc[s] }));
+
+    // Summary
+    const totalRuns = (get(`SELECT COALESCE(SUM(run_count),0) as v FROM workflows`) || {}).v || 0;
+    const activeWorkflows = (get(`SELECT COUNT(*) as v FROM workflows WHERE status='active'`) || {}).v || 0;
+    const totalWorkflows = (get(`SELECT COUNT(*) as v FROM workflows`) || {}).v || 0;
+    const todayRuns = (get(`SELECT COUNT(*) as v FROM workflow_run_logs WHERE DATE(executed_at) = DATE('now')`) || {}).v || 0;
+    const avgDailyRuns = trend7d.length > 0
+      ? Math.round(trend7d.reduce((s, d) => s + d.runs, 0) / trend7d.length)
+      : 0;
+
+    res.json({
+      byCategory: categorized,
+      topWorkflows,
+      trend7d,
+      aarrrAttribution,
+      summary: { totalRuns, activeWorkflows, totalWorkflows, todayRuns, avgDailyRuns },
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 module.exports = router;

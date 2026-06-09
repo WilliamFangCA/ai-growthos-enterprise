@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell,
-  LineChart, Line, PieChart, Pie, Legend, CartesianGrid,
+  LineChart, Line, PieChart, Pie, Legend, CartesianGrid, LabelList,
 } from 'recharts';
 
 const PLATFORM_COLORS = {
@@ -42,6 +42,22 @@ const TOOLTIP_STYLE = {
   cursor: { fill: 'rgba(59,130,246,0.05)' },
 };
 
+const CATEGORY_CONFIG = {
+  acquisition: { label: '獲客',  color: '#3b82f6', icon: '🎯' },
+  activation:  { label: '激活',  color: '#8b5cf6', icon: '⚡' },
+  retention:   { label: '留存',  color: '#10b981', icon: '💎' },
+  revenue:     { label: '收入',  color: '#f59e0b', icon: '💰' },
+  referral:    { label: '裂變',  color: '#ef4444', icon: '🔗' },
+  order:       { label: '訂單',  color: '#06b6d4', icon: '📦' },
+  comms:       { label: '通訊',  color: '#ec4899', icon: '💬' },
+  general:     { label: '一般',  color: '#6b7280', icon: '⚙️' },
+};
+
+const AARRR_STAGE_COLORS = {
+  Acquisition: '#3b82f6', Activation: '#8b5cf6', Retention: '#10b981',
+  Revenue: '#f59e0b', Referral: '#ef4444',
+};
+
 export default function Analytics() {
   const [tab, setTab] = useState('overview');
   const [overview, setOverview] = useState(null);
@@ -49,6 +65,7 @@ export default function Analytics() {
   const [members, setMembers] = useState(null);
   const [comms, setComms] = useState(null);
   const [aarrr, setAarrr] = useState(null);
+  const [wfAnalytics, setWfAnalytics] = useState(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -58,8 +75,9 @@ export default function Analytics() {
       fetch('/api/analytics/members').then(r => r.json()),
       fetch('/api/analytics/comms').then(r => r.json()),
       fetch('/api/analytics/aarrr').then(r => r.json()),
-    ]).then(([ov, rv, mb, cm, aa]) => {
-      setOverview(ov); setRevenue(rv); setMembers(mb); setComms(cm); setAarrr(aa);
+      fetch('/api/analytics/workflows').then(r => r.json()),
+    ]).then(([ov, rv, mb, cm, aa, wf]) => {
+      setOverview(ov); setRevenue(rv); setMembers(mb); setComms(cm); setAarrr(aa); setWfAnalytics(wf);
       setLoading(false);
     }).catch(() => setLoading(false));
   }, []);
@@ -86,10 +104,11 @@ export default function Analytics() {
       {/* Tabs */}
       <div style={{ display: 'flex', gap: 0, background: '#1a1d2e', border: '1px solid #2a2d3e', borderRadius: 10, overflow: 'hidden', width: 'fit-content', marginBottom: 20 }}>
         {[
-          { key: 'overview', label: 'AARRR 漏斗' },
-          { key: 'revenue',  label: '營收分析'   },
-          { key: 'members',  label: '會員分析'   },
-          { key: 'comms',    label: '通訊分析'   },
+          { key: 'overview',   label: 'AARRR 漏斗' },
+          { key: 'revenue',    label: '營收分析'   },
+          { key: 'members',    label: '會員分析'   },
+          { key: 'comms',      label: '通訊分析'   },
+          { key: 'workflows',  label: 'Workflow BI' },
         ].map(t => (
           <button key={t.key} onClick={() => setTab(t.key)} style={{
             padding: '9px 22px', border: 'none', cursor: 'pointer', fontSize: 13,
@@ -269,6 +288,122 @@ export default function Analytics() {
                   </div>
                 );
               })}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* === WORKFLOW BI TAB === */}
+      {tab === 'workflows' && wfAnalytics && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+          {/* Summary KPIs */}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 14 }}>
+            {[
+              { label: 'Workflow 總數', value: wfAnalytics.summary.totalWorkflows, icon: '⚡', color: '#3b82f6' },
+              { label: '活躍中', value: wfAnalytics.summary.activeWorkflows, icon: '✅', color: '#10b981' },
+              { label: '累計執行', value: fmt(wfAnalytics.summary.totalRuns), icon: '🔄', color: '#8b5cf6' },
+              { label: '日均執行', value: fmt(wfAnalytics.summary.avgDailyRuns), icon: '📊', color: '#f59e0b' },
+            ].map(s => (
+              <StatCard key={s.label} label={s.label} value={loading ? '—' : s.value} icon={s.icon} color={s.color} />
+            ))}
+          </div>
+
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 340px', gap: 16 }}>
+            {/* Left column */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+              {/* 7-day trend */}
+              <div style={CARD}>
+                <h2 style={{ fontSize: 14, fontWeight: 600, color: '#f9fafb', margin: '0 0 14px' }}>7 天執行趨勢</h2>
+                <ResponsiveContainer width="100%" height={180}>
+                  <LineChart data={wfAnalytics.trend7d} margin={{ left: 0, right: 20, top: 5, bottom: 0 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#2a2d3e" />
+                    <XAxis dataKey="date" tick={{ fill: '#6b7280', fontSize: 10 }} tickFormatter={d => d.slice(5)} axisLine={false} tickLine={false} />
+                    <YAxis tick={{ fill: '#6b7280', fontSize: 10 }} axisLine={false} tickLine={false} />
+                    <Tooltip {...TOOLTIP_STYLE} formatter={v => [fmt(v), 'Runs']} />
+                    <Line type="monotone" dataKey="runs" stroke="#8b5cf6" strokeWidth={2} dot={{ fill: '#8b5cf6', r: 3 }} />
+                  </LineChart>
+                </ResponsiveContainer>
+              </div>
+
+              {/* Category breakdown bar chart */}
+              <div style={CARD}>
+                <h2 style={{ fontSize: 14, fontWeight: 600, color: '#f9fafb', margin: '0 0 14px' }}>各類別執行數</h2>
+                <ResponsiveContainer width="100%" height={220}>
+                  <BarChart
+                    data={wfAnalytics.byCategory.map(c => ({
+                      ...c,
+                      label: CATEGORY_CONFIG[c.category]?.label || c.category,
+                      fill: CATEGORY_CONFIG[c.category]?.color || '#6b7280',
+                    }))}
+                    margin={{ left: 0, right: 40, top: 5, bottom: 5 }}
+                  >
+                    <CartesianGrid strokeDasharray="3 3" stroke="#2a2d3e" />
+                    <XAxis dataKey="label" tick={{ fill: '#9ca3af', fontSize: 11 }} axisLine={false} tickLine={false} />
+                    <YAxis tick={{ fill: '#6b7280', fontSize: 10 }} axisLine={false} tickLine={false} tickFormatter={v => v >= 1000 ? `${(v/1000).toFixed(1)}K` : v} />
+                    <Tooltip {...TOOLTIP_STYLE} formatter={v => [fmt(v), '執行次數']} />
+                    <Bar dataKey="total_runs" radius={[4, 4, 0, 0]}>
+                      {wfAnalytics.byCategory.map((c, i) => (
+                        <Cell key={i} fill={CATEGORY_CONFIG[c.category]?.color || '#6b7280'} />
+                      ))}
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+
+            {/* Right column */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+              {/* Top workflows */}
+              <div style={CARD}>
+                <h2 style={{ fontSize: 14, fontWeight: 600, color: '#f9fafb', margin: '0 0 14px' }}>Top Workflows</h2>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  {wfAnalytics.topWorkflows.map((wf, i) => {
+                    const cfg = CATEGORY_CONFIG[wf.category] || CATEGORY_CONFIG.general;
+                    const maxRuns = wfAnalytics.topWorkflows[0]?.run_count || 1;
+                    return (
+                      <div key={wf.id} style={{ background: '#0f1117', borderRadius: 8, padding: '10px 12px' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 5 }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 6, flex: 1, minWidth: 0 }}>
+                            <span style={{ fontSize: 11, color: '#4b5563', width: 16, flexShrink: 0 }}>#{i+1}</span>
+                            <span style={{ fontSize: 10, color: cfg.color, flexShrink: 0 }}>{cfg.icon}</span>
+                            <span style={{ fontSize: 11, fontWeight: 600, color: '#e5e7eb', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{wf.name}</span>
+                          </div>
+                          <span style={{ fontSize: 13, fontWeight: 700, color: '#f9fafb', flexShrink: 0, marginLeft: 8 }}>{fmt(wf.run_count)}</span>
+                        </div>
+                        <div style={{ height: 3, background: '#2a2d3e', borderRadius: 2, overflow: 'hidden' }}>
+                          <div style={{ width: `${(wf.run_count / maxRuns) * 100}%`, height: '100%', background: cfg.color, borderRadius: 2 }} />
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* AARRR attribution */}
+              <div style={CARD}>
+                <h2 style={{ fontSize: 14, fontWeight: 600, color: '#f9fafb', margin: '0 0 14px' }}>AARRR 歸因分佈</h2>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  {wfAnalytics.aarrrAttribution.map((a, i) => {
+                    const total = wfAnalytics.aarrrAttribution.reduce((s, x) => s + x.runs, 0) || 1;
+                    const pctVal = Math.round((a.runs / total) * 100);
+                    const color = AARRR_STAGE_COLORS[a.stage] || '#6b7280';
+                    return (
+                      <div key={a.stage} style={{ background: '#0f1117', borderRadius: 8, padding: '10px 12px' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 5 }}>
+                          <span style={{ fontSize: 12, color: '#9ca3af' }}>{a.stage}</span>
+                          <div style={{ display: 'flex', gap: 8 }}>
+                            <span style={{ fontSize: 11, color: '#6b7280' }}>{pctVal}%</span>
+                            <span style={{ fontSize: 12, fontWeight: 700, color }}>{fmt(a.runs)}</span>
+                          </div>
+                        </div>
+                        <div style={{ height: 4, background: '#2a2d3e', borderRadius: 2, overflow: 'hidden' }}>
+                          <div style={{ width: `${pctVal}%`, height: '100%', background: color, borderRadius: 2 }} />
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
             </div>
           </div>
         </div>
