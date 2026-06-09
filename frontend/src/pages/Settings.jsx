@@ -84,6 +84,13 @@ const MESSAGING_PLATFORMS = [
           { key: 'secret', label: 'Channel Secret',       type: 'password' },
         ],
       },
+      {
+        type: 'credentials', label: '帳號密碼登入',
+        fields: [
+          { key: 'username', label: 'LINE 帳號（手機 / Email）', type: 'text' },
+          { key: 'password', label: '密碼',                      type: 'password' },
+        ],
+      },
     ],
   },
   {
