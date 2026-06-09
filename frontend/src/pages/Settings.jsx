@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState } from 'react';
 import { useUISettings } from '../contexts/UISettingsContext.jsx';
 
 const STORAGE_KEY = 'growthos_integrations';
@@ -194,298 +194,255 @@ const MESSAGING_PLATFORMS = [
   },
 ];
 
-// ─── Auth type label mapping ──────────────────────────────────────────────────
+// ─── AccountCard ──────────────────────────────────────────────────────────────
 
-function getAuthTypeLabel(platformId, authType) {
-  const platform = MESSAGING_PLATFORMS.find(p => p.id === platformId);
-  if (!platform) return authType;
-  const at = platform.auth_types.find(a => a.type === authType);
-  return at ? at.label : authType;
-}
+function AccountCard({ account, colors, onChange, onDelete }) {
+  const [visible, setVisible] = useState(new Set());
 
-// ─── AccountModal ─────────────────────────────────────────────────────────────
+  const platform = MESSAGING_PLATFORMS.find(p => p.id === account.platform);
+  const authDef = platform
+    ? (platform.auth_types.find(a => a.type === account.auth_type) || platform.auth_types[0])
+    : null;
 
-function AccountModal({ platform, editAccount, onSave, onClose, colors }) {
-  const defaultAuthType = platform.auth_types[0].type;
-  const [accountName, setAccountName]   = useState(editAccount?.account_name || '');
-  const [authType, setAuthType]         = useState(editAccount?.auth_type || defaultAuthType);
-  const [fields, setFields]             = useState(() => {
-    if (editAccount) {
-      return {
-        token:     editAccount.token     || '',
-        secret:    editAccount.secret    || '',
-        appid:     editAccount.appid     || '',
-        username:  editAccount.username  || '',
-        password:  editAccount.password  || '',
-        smtp_host: editAccount.smtp_host || '',
-        smtp_port: editAccount.smtp_port || '',
-      };
-    }
-    return { token: '', secret: '', appid: '', username: '', password: '', smtp_host: '', smtp_port: '' };
-  });
-  const [visibleFields, setVisibleFields] = useState(new Set());
+  function update(field, value) {
+    onChange({ ...account, [field]: value });
+  }
 
-  const currentAuthDef = platform.auth_types.find(a => a.type === authType) || platform.auth_types[0];
-
-  // Close on Escape key
-  useEffect(() => {
-    function handleKeyDown(e) {
-      if (e.key === 'Escape') onClose();
-    }
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [onClose]);
+  function handlePlatformSelect(platformId) {
+    const newPlatform = MESSAGING_PLATFORMS.find(p => p.id === platformId);
+    onChange({
+      ...account,
+      platform: platformId,
+      auth_type: newPlatform?.auth_types[0]?.type || '',
+    });
+  }
 
   function toggleFieldVisible(key) {
-    setVisibleFields(prev => {
+    setVisible(prev => {
       const next = new Set(prev);
       next.has(key) ? next.delete(key) : next.add(key);
       return next;
     });
   }
 
-  function handleFieldChange(key, value) {
-    setFields(prev => ({ ...prev, [key]: value }));
-  }
-
-  function handleAuthTypeChange(newType) {
-    setAuthType(newType);
-  }
-
-  function handleSave() {
-    if (!accountName.trim()) return;
-    const account = {
-      id:           editAccount?.id || `${platform.id}_${Date.now()}`,
-      platform:     platform.id,
-      account_name: accountName.trim(),
-      auth_type:    authType,
-      token:        fields.token,
-      secret:       fields.secret,
-      appid:        fields.appid,
-      username:     fields.username,
-      password:     fields.password,
-      smtp_host:    fields.smtp_host,
-      smtp_port:    fields.smtp_port,
-      enabled:      editAccount?.enabled !== undefined ? editAccount.enabled : true,
-      created_at:   editAccount?.created_at || new Date().toISOString(),
-    };
-    onSave(account);
-  }
-
-  const isEditing = !!editAccount;
-  const title = isEditing ? '編輯帳號' : `新增 ${platform.name} 帳號`;
-
   return (
-    <div
-      onClick={e => { if (e.target === e.currentTarget) onClose(); }}
-      style={{
-        position: 'fixed', inset: 0, zIndex: 1000,
-        background: 'rgba(0,0,0,0.6)',
-        display: 'flex', alignItems: 'center', justifyContent: 'center',
-        padding: 16,
-      }}
-    >
-      <div
-        onClick={e => e.stopPropagation()}
-        style={{
-          width: '100%', maxWidth: 480,
-          background: colors.card,
-          border: `1px solid ${colors.border}`,
-          borderRadius: 16,
-          boxShadow: '0 24px 64px rgba(0,0,0,0.4)',
-          overflow: 'hidden',
-        }}
-      >
-        {/* Modal header */}
-        <div style={{
-          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-          padding: '20px 24px',
-          borderBottom: `1px solid ${colors.border}`,
-        }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            <span style={{
-              width: 36, height: 36, borderRadius: 8,
-              background: platform.color + '20',
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              fontSize: 18,
-            }}>
-              {platform.icon}
-            </span>
-            <span style={{ fontSize: 16, fontWeight: 700, color: colors.text }}>{title}</span>
+    <div style={{
+      background: colors.card,
+      border: `1px solid ${colors.border}`,
+      borderRadius: 12,
+      marginBottom: 12,
+      overflow: 'hidden',
+    }}>
+      {/* ── Card header ── */}
+      <div style={{
+        display: 'flex', alignItems: 'center', gap: 10,
+        padding: '12px 16px',
+        borderBottom: `1px solid ${colors.border}`,
+      }}>
+        {/* Platform badge or selector */}
+        {platform ? (
+          <div style={{
+            display: 'flex', alignItems: 'center', gap: 7,
+            flexShrink: 0,
+            background: platform.color + '18',
+            border: `1px solid ${platform.color}40`,
+            borderRadius: 8, padding: '5px 10px',
+          }}>
+            <span style={{ fontSize: 15, lineHeight: 1 }}>{platform.icon}</span>
+            <span style={{ fontSize: 12, fontWeight: 700, color: platform.color }}>{platform.name}</span>
           </div>
-          <button
-            onClick={onClose}
+        ) : (
+          <select
+            value=""
+            onChange={e => handlePlatformSelect(e.target.value)}
             style={{
-              background: 'none', border: 'none', cursor: 'pointer',
-              color: colors.textDim, fontSize: 20, lineHeight: 1,
-              padding: '2px 6px', borderRadius: 4,
+              padding: '6px 10px', borderRadius: 8, flexShrink: 0,
+              background: colors.inputBg,
+              border: `1px solid ${colors.inputBorder}`,
+              color: colors.textDim,
+              fontSize: 12, cursor: 'pointer', outline: 'none',
             }}
           >
-            ×
-          </button>
-        </div>
+            <option value="" disabled>選擇平台...</option>
+            {MESSAGING_PLATFORMS.map(p => (
+              <option key={p.id} value={p.id}>{p.icon} {p.name}</option>
+            ))}
+          </select>
+        )}
 
-        {/* Modal body */}
-        <div style={{ padding: '24px 24px 0' }}>
-          {/* Account Name */}
-          <div style={{ marginBottom: 20 }}>
-            <label style={{
-              display: 'block', fontSize: 11, fontWeight: 600,
-              color: colors.textDim, marginBottom: 6,
-              letterSpacing: '0.06em', textTransform: 'uppercase',
-            }}>
-              帳號名稱 *
-            </label>
-            <input
-              type="text"
-              value={accountName}
-              onChange={e => setAccountName(e.target.value)}
-              placeholder="例如：主要商店、個人帳號..."
-              autoFocus
+        {/* Vertical divider */}
+        <div style={{ width: 1, height: 20, background: colors.border, flexShrink: 0 }} />
+
+        {/* Account name annotation */}
+        <span style={{ fontSize: 11, color: colors.textDim, flexShrink: 0 }}>帳號名稱</span>
+        <input
+          type="text"
+          value={account.account_name}
+          onChange={e => update('account_name', e.target.value)}
+          placeholder="例如：主要商店、個人帳號..."
+          style={{
+            flex: 1, minWidth: 0, padding: '5px 8px',
+            borderRadius: 6, border: '1px solid transparent',
+            background: 'transparent', color: colors.text,
+            fontSize: 13, fontWeight: 500, outline: 'none',
+            transition: 'border-color 0.15s, background 0.15s',
+          }}
+          onFocus={e => {
+            e.target.style.borderColor = '#3b82f6';
+            e.target.style.background = colors.inputBg;
+          }}
+          onBlur={e => {
+            e.target.style.borderColor = 'transparent';
+            e.target.style.background = 'transparent';
+          }}
+        />
+
+        {/* Enabled toggle */}
+        <button
+          onClick={() => update('enabled', !account.enabled)}
+          title={account.enabled ? '停用' : '啟用'}
+          style={{
+            width: 38, height: 20, borderRadius: 10, border: 'none',
+            cursor: 'pointer', flexShrink: 0, position: 'relative',
+            background: account.enabled ? '#10b981' : colors.border,
+            transition: 'background 0.2s',
+          }}
+        >
+          <span style={{
+            position: 'absolute',
+            top: 2, left: account.enabled ? 19 : 2,
+            width: 16, height: 16, borderRadius: '50%',
+            background: '#fff', transition: 'left 0.2s',
+          }} />
+        </button>
+
+        {/* Delete button */}
+        <button
+          onClick={() => onDelete(account.id)}
+          title="刪除"
+          style={{
+            background: 'none', border: `1px solid ${colors.border}`,
+            borderRadius: 6, cursor: 'pointer', flexShrink: 0,
+            color: colors.textDim, fontSize: 15, lineHeight: 1,
+            padding: '3px 8px', transition: 'all 0.15s',
+          }}
+          onMouseEnter={e => {
+            e.currentTarget.style.borderColor = '#ef4444';
+            e.currentTarget.style.color = '#ef4444';
+          }}
+          onMouseLeave={e => {
+            e.currentTarget.style.borderColor = colors.border;
+            e.currentTarget.style.color = colors.textDim;
+          }}
+        >
+          ×
+        </button>
+      </div>
+
+      {/* ── Auth type radio pills (only when platform has multiple options) ── */}
+      {platform && platform.auth_types.length > 1 && (
+        <div style={{
+          display: 'flex', alignItems: 'center', gap: 8,
+          padding: '10px 16px',
+          borderBottom: `1px solid ${colors.border}`,
+          background: colors.inputBg,
+        }}>
+          <span style={{
+            fontSize: 10, fontWeight: 600, color: colors.textDim,
+            letterSpacing: '0.08em', textTransform: 'uppercase', marginRight: 4,
+          }}>
+            驗證方式
+          </span>
+          {platform.auth_types.map(at => (
+            <label
+              key={at.type}
               style={{
-                width: '100%', padding: '9px 12px', borderRadius: 8,
-                background: colors.inputBg, border: `1px solid ${colors.inputBorder}`,
-                color: colors.text, fontSize: 13, outline: 'none',
-                boxSizing: 'border-box',
+                display: 'flex', alignItems: 'center', gap: 6,
+                padding: '4px 12px', borderRadius: 20, cursor: 'pointer',
+                border: `1px solid ${account.auth_type === at.type ? '#3b82f6' : colors.border}`,
+                background: account.auth_type === at.type ? 'rgba(59,130,246,0.1)' : 'transparent',
+                fontSize: 12,
+                fontWeight: account.auth_type === at.type ? 600 : 400,
+                color: account.auth_type === at.type ? '#3b82f6' : colors.textMuted,
+                transition: 'all 0.15s',
               }}
-              onFocus={e => { e.target.style.borderColor = '#3b82f6'; }}
-              onBlur={e => { e.target.style.borderColor = colors.inputBorder; }}
-            />
-          </div>
+            >
+              <input
+                type="radio"
+                name={`auth_${account.id}`}
+                value={at.type}
+                checked={account.auth_type === at.type}
+                onChange={() => onChange({ ...account, auth_type: at.type })}
+                style={{ accentColor: '#3b82f6', width: 11, height: 11 }}
+              />
+              {at.label}
+            </label>
+          ))}
+        </div>
+      )}
 
-          {/* Auth type selector (only if multiple options) */}
-          {platform.auth_types.length > 1 && (
-            <div style={{ marginBottom: 20 }}>
+      {/* ── Credential fields ── */}
+      {platform && authDef ? (
+        <div style={{ padding: '4px 16px 16px' }}>
+          {authDef.fields.map((field, idx) => (
+            <div key={field.key} style={{
+              paddingTop: 14,
+              borderTop: idx > 0 ? `1px solid ${colors.border}` : 'none',
+            }}>
               <label style={{
                 display: 'block', fontSize: 11, fontWeight: 600,
-                color: colors.textDim, marginBottom: 10,
+                color: colors.textDim, marginBottom: 5,
                 letterSpacing: '0.06em', textTransform: 'uppercase',
               }}>
-                驗證方式
+                {field.label}
               </label>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                {platform.auth_types.map(at => (
-                  <label
-                    key={at.type}
+              <div style={{ position: 'relative' }}>
+                <input
+                  type={field.type === 'password' && !visible.has(field.key) ? 'password' : 'text'}
+                  value={account[field.key] || ''}
+                  onChange={e => update(field.key, e.target.value)}
+                  placeholder={field.placeholder || ''}
+                  autoComplete="off"
+                  style={{
+                    width: '100%',
+                    padding: field.type === 'password' ? '8px 42px 8px 12px' : '8px 12px',
+                    borderRadius: 8,
+                    background: colors.inputBg,
+                    border: `1px solid ${colors.inputBorder}`,
+                    color: colors.text,
+                    fontSize: 13, outline: 'none', boxSizing: 'border-box',
+                    fontFamily: "'SF Mono', 'Fira Code', monospace",
+                    transition: 'border-color 0.15s',
+                    opacity: account.enabled ? 1 : 0.5,
+                  }}
+                  onFocus={e => { e.target.style.borderColor = '#3b82f6'; }}
+                  onBlur={e => { e.target.style.borderColor = colors.inputBorder; }}
+                />
+                {field.type === 'password' && (
+                  <button
+                    type="button"
+                    onClick={() => toggleFieldVisible(field.key)}
                     style={{
-                      display: 'flex', alignItems: 'center', gap: 10,
-                      padding: '10px 14px', borderRadius: 8, cursor: 'pointer',
-                      border: `1px solid ${authType === at.type ? '#3b82f6' : colors.border}`,
-                      background: authType === at.type ? 'rgba(59,130,246,0.08)' : colors.inputBg,
-                      transition: 'all 0.15s',
+                      position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)',
+                      background: 'none', border: 'none', cursor: 'pointer',
+                      color: colors.textDim, fontSize: 15, lineHeight: 1, padding: 2,
                     }}
                   >
-                    <input
-                      type="radio"
-                      name="auth_type"
-                      value={at.type}
-                      checked={authType === at.type}
-                      onChange={() => handleAuthTypeChange(at.type)}
-                      style={{ accentColor: '#3b82f6' }}
-                    />
-                    <span style={{
-                      fontSize: 13,
-                      color: authType === at.type ? '#3b82f6' : colors.text,
-                      fontWeight: authType === at.type ? 600 : 400,
-                    }}>
-                      {at.label}
-                    </span>
-                  </label>
-                ))}
+                    {visible.has(field.key) ? '🙈' : '👁️'}
+                  </button>
+                )}
               </div>
             </div>
-          )}
-
-          {/* Credential fields */}
-          <div style={{ marginBottom: 4 }}>
-            {currentAuthDef.fields.map((field, idx) => (
-              <div
-                key={field.key}
-                style={{
-                  marginBottom: idx < currentAuthDef.fields.length - 1 ? 16 : 0,
-                }}
-              >
-                <label style={{
-                  display: 'block', fontSize: 11, fontWeight: 600,
-                  color: colors.textDim, marginBottom: 6,
-                  letterSpacing: '0.06em', textTransform: 'uppercase',
-                }}>
-                  {field.label}
-                </label>
-                <div style={{ position: 'relative' }}>
-                  <input
-                    type={field.type === 'password' && !visibleFields.has(field.key) ? 'password' : 'text'}
-                    value={fields[field.key] || ''}
-                    onChange={e => handleFieldChange(field.key, e.target.value)}
-                    placeholder={field.placeholder || ''}
-                    autoComplete="off"
-                    style={{
-                      width: '100%',
-                      padding: field.type === 'password' ? '9px 44px 9px 12px' : '9px 12px',
-                      borderRadius: 8,
-                      background: colors.inputBg,
-                      border: `1px solid ${colors.inputBorder}`,
-                      color: colors.text,
-                      fontSize: 13, outline: 'none', boxSizing: 'border-box',
-                      fontFamily: "'SF Mono', 'Fira Code', monospace",
-                      transition: 'border-color 0.15s',
-                    }}
-                    onFocus={e => { e.target.style.borderColor = '#3b82f6'; }}
-                    onBlur={e => { e.target.style.borderColor = colors.inputBorder; }}
-                  />
-                  {field.type === 'password' && (
-                    <button
-                      type="button"
-                      onClick={() => toggleFieldVisible(field.key)}
-                      style={{
-                        position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)',
-                        background: 'none', border: 'none', cursor: 'pointer',
-                        color: colors.textDim, fontSize: 16, lineHeight: 1, padding: 2,
-                      }}
-                    >
-                      {visibleFields.has(field.key) ? '🙈' : '👁️'}
-                    </button>
-                  )}
-                </div>
-              </div>
-            ))}
-          </div>
+          ))}
         </div>
-
-        {/* Modal footer */}
+      ) : !platform ? (
         <div style={{
-          display: 'flex', gap: 12, justifyContent: 'flex-end',
-          padding: '20px 24px',
+          padding: '16px',
+          fontSize: 12, color: colors.textDim, textAlign: 'center',
         }}>
-          <button
-            onClick={onClose}
-            style={{
-              padding: '9px 24px', borderRadius: 8,
-              border: `1px solid ${colors.border}`,
-              background: 'transparent', cursor: 'pointer',
-              color: colors.textMuted, fontSize: 14, fontWeight: 500,
-            }}
-          >
-            取消
-          </button>
-          <button
-            onClick={handleSave}
-            disabled={!accountName.trim()}
-            style={{
-              padding: '9px 28px', borderRadius: 8, border: 'none',
-              cursor: accountName.trim() ? 'pointer' : 'not-allowed',
-              background: accountName.trim()
-                ? 'linear-gradient(90deg,#3b82f6,#8b5cf6)'
-                : colors.border,
-              color: '#fff', fontSize: 14, fontWeight: 600,
-              opacity: accountName.trim() ? 1 : 0.5,
-              transition: 'all 0.15s',
-            }}
-          >
-            儲存
-          </button>
+          選擇平台後顯示憑證欄位
         </div>
-      </div>
+      ) : null}
     </div>
   );
 }
@@ -534,8 +491,6 @@ function MessagingSection({ colors }) {
     }
   });
 
-  const [modal, setModal] = useState({ open: false, platform: null, editAccount: null });
-
   function saveToStorage(newAccounts) {
     try {
       const raw = localStorage.getItem(STORAGE_KEY);
@@ -545,35 +500,16 @@ function MessagingSection({ colors }) {
     } catch {}
   }
 
-  function openAdd(platform) {
-    setModal({ open: true, platform, editAccount: null });
-  }
-
-  function openEdit(account) {
-    const platform = MESSAGING_PLATFORMS.find(p => p.id === account.platform);
-    if (!platform) return;
-    setModal({ open: true, platform, editAccount: account });
-  }
-
-  function closeModal() {
-    setModal({ open: false, platform: null, editAccount: null });
-  }
-
-  const handleSave = useCallback(function handleSave(account) {
+  function handleChange(updatedAccount) {
     setAccounts(prev => {
-      const existing = prev.findIndex(a => a.id === account.id);
-      const next = existing >= 0
-        ? prev.map(a => a.id === account.id ? account : a)
-        : [...prev, account];
+      const next = prev.map(a => a.id === updatedAccount.id ? updatedAccount : a);
       saveToStorage(next);
       return next;
     });
-    closeModal();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }
 
-  function handleDelete(accountId, accountName) {
-    if (!window.confirm(`確定要刪除帳號「${accountName}」嗎？`)) return;
+  function handleDelete(accountId) {
+    if (!window.confirm('確定要刪除此帳號嗎？')) return;
     setAccounts(prev => {
       const next = prev.filter(a => a.id !== accountId);
       saveToStorage(next);
@@ -581,9 +517,20 @@ function MessagingSection({ colors }) {
     });
   }
 
-  function handleToggleEnabled(accountId) {
+  function addNewCard() {
+    const blank = {
+      id: `new_${Date.now()}`,
+      platform: '',
+      account_name: '',
+      auth_type: '',
+      token: '', secret: '', appid: '',
+      username: '', password: '',
+      smtp_host: '', smtp_port: '',
+      enabled: true,
+      created_at: new Date().toISOString(),
+    };
     setAccounts(prev => {
-      const next = prev.map(a => a.id === accountId ? { ...a, enabled: !a.enabled } : a);
+      const next = [...prev, blank];
       saveToStorage(next);
       return next;
     });
@@ -591,188 +538,53 @@ function MessagingSection({ colors }) {
 
   return (
     <div>
-      {MESSAGING_PLATFORMS.map(platform => {
-        const platformAccounts = accounts.filter(a => a.platform === platform.id);
-        return (
-          <div
-            key={platform.id}
-            style={{
-              background: colors.card,
-              border: `1px solid ${colors.border}`,
-              borderRadius: 12,
-              marginBottom: 12,
-              overflow: 'hidden',
-            }}
-          >
-            {/* Platform row */}
-            <div style={{
-              display: 'flex', alignItems: 'center', gap: 12,
-              padding: '14px 20px',
-              borderBottom: platformAccounts.length > 0 ? `1px solid ${colors.border}` : 'none',
-            }}>
-              {/* Platform icon */}
-              <div style={{
-                width: 36, height: 36, borderRadius: 8, flexShrink: 0,
-                background: platform.color + '20',
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                fontSize: 18,
-              }}>
-                {platform.icon}
-              </div>
-
-              {/* Platform name */}
-              <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 8 }}>
-                <span style={{ fontSize: 14, fontWeight: 600, color: colors.text }}>
-                  {platform.name}
-                </span>
-                {platformAccounts.length > 0 && (
-                  <span style={{
-                    fontSize: 11, fontWeight: 700,
-                    background: platform.color + '25',
-                    color: platform.color,
-                    padding: '2px 8px', borderRadius: 20,
-                  }}>
-                    {platformAccounts.length} 個帳號
-                  </span>
-                )}
-              </div>
-
-              {/* Add account button */}
-              <button
-                onClick={() => openAdd(platform)}
-                style={{
-                  display: 'flex', alignItems: 'center', gap: 6,
-                  padding: '7px 14px', borderRadius: 7,
-                  border: `1px solid ${colors.border}`,
-                  background: 'transparent', cursor: 'pointer',
-                  color: colors.textMuted, fontSize: 12, fontWeight: 500,
-                  transition: 'all 0.15s',
-                }}
-                onMouseEnter={e => {
-                  e.currentTarget.style.borderColor = platform.color;
-                  e.currentTarget.style.color = platform.color;
-                }}
-                onMouseLeave={e => {
-                  e.currentTarget.style.borderColor = colors.border;
-                  e.currentTarget.style.color = colors.textMuted;
-                }}
-              >
-                <span style={{ fontSize: 14, lineHeight: 1 }}>＋</span>
-                <span>新增帳號</span>
-              </button>
-            </div>
-
-            {/* Account list */}
-            {platformAccounts.map((account, idx) => {
-              const authLabel = getAuthTypeLabel(account.platform, account.auth_type);
-              return (
-                <div
-                  key={account.id}
-                  style={{
-                    display: 'flex', alignItems: 'center', gap: 12,
-                    padding: '12px 20px',
-                    borderBottom: idx < platformAccounts.length - 1 ? `1px solid ${colors.border}` : 'none',
-                    background: colors.inputBg,
-                  }}
-                >
-                  {/* Account name + auth badge */}
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontSize: 13, fontWeight: 600, color: colors.text, marginBottom: 3 }}>
-                      {account.account_name}
-                    </div>
-                    <div style={{
-                      display: 'inline-block',
-                      fontSize: 10, fontWeight: 600,
-                      background: colors.border,
-                      color: colors.textDim,
-                      padding: '2px 7px', borderRadius: 4,
-                      letterSpacing: '0.03em',
-                    }}>
-                      {authLabel}
-                    </div>
-                  </div>
-
-                  {/* Enabled toggle */}
-                  <button
-                    onClick={() => handleToggleEnabled(account.id)}
-                    title={account.enabled ? '停用' : '啟用'}
-                    style={{
-                      width: 40, height: 22, borderRadius: 11,
-                      border: 'none', cursor: 'pointer',
-                      background: account.enabled ? '#10b981' : colors.border,
-                      position: 'relative', flexShrink: 0,
-                      transition: 'background 0.2s',
-                    }}
-                  >
-                    <span style={{
-                      position: 'absolute',
-                      top: 3, left: account.enabled ? 21 : 3,
-                      width: 16, height: 16, borderRadius: '50%',
-                      background: '#fff',
-                      transition: 'left 0.2s',
-                    }} />
-                  </button>
-
-                  {/* Edit button */}
-                  <button
-                    onClick={() => openEdit(account)}
-                    title="編輯"
-                    style={{
-                      background: 'none', border: `1px solid ${colors.border}`,
-                      cursor: 'pointer', color: colors.textDim,
-                      fontSize: 14, padding: '5px 9px', borderRadius: 6,
-                      lineHeight: 1, transition: 'all 0.15s',
-                    }}
-                    onMouseEnter={e => {
-                      e.currentTarget.style.borderColor = '#3b82f6';
-                      e.currentTarget.style.color = '#3b82f6';
-                    }}
-                    onMouseLeave={e => {
-                      e.currentTarget.style.borderColor = colors.border;
-                      e.currentTarget.style.color = colors.textDim;
-                    }}
-                  >
-                    ✏️
-                  </button>
-
-                  {/* Delete button */}
-                  <button
-                    onClick={() => handleDelete(account.id, account.account_name)}
-                    title="刪除"
-                    style={{
-                      background: 'none', border: `1px solid ${colors.border}`,
-                      cursor: 'pointer', color: colors.textDim,
-                      fontSize: 14, padding: '5px 9px', borderRadius: 6,
-                      lineHeight: 1, transition: 'all 0.15s',
-                    }}
-                    onMouseEnter={e => {
-                      e.currentTarget.style.borderColor = '#ef4444';
-                      e.currentTarget.style.color = '#ef4444';
-                    }}
-                    onMouseLeave={e => {
-                      e.currentTarget.style.borderColor = colors.border;
-                      e.currentTarget.style.color = colors.textDim;
-                    }}
-                  >
-                    🗑️
-                  </button>
-                </div>
-              );
-            })}
-          </div>
-        );
-      })}
-
-      {/* Add/Edit Modal */}
-      {modal.open && modal.platform && (
-        <AccountModal
-          platform={modal.platform}
-          editAccount={modal.editAccount}
-          onSave={handleSave}
-          onClose={closeModal}
+      {accounts.map(account => (
+        <AccountCard
+          key={account.id}
+          account={account}
           colors={colors}
+          onChange={handleChange}
+          onDelete={handleDelete}
         />
+      ))}
+
+      {accounts.length === 0 && (
+        <div style={{
+          textAlign: 'center', padding: '36px 20px',
+          color: colors.textDim, fontSize: 13,
+          background: colors.card,
+          border: `1px dashed ${colors.border}`,
+          borderRadius: 12, marginBottom: 12,
+        }}>
+          尚未新增任何通訊帳號，點擊下方按鈕開始新增
+        </div>
       )}
+
+      <button
+        onClick={addNewCard}
+        style={{
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          gap: 8, width: '100%', padding: '11px 16px',
+          borderRadius: 10,
+          border: `1.5px dashed ${colors.border}`,
+          background: 'transparent', cursor: 'pointer',
+          color: colors.textMuted, fontSize: 14, fontWeight: 500,
+          transition: 'all 0.2s',
+        }}
+        onMouseEnter={e => {
+          e.currentTarget.style.borderColor = '#3b82f6';
+          e.currentTarget.style.color = '#3b82f6';
+          e.currentTarget.style.background = 'rgba(59,130,246,0.05)';
+        }}
+        onMouseLeave={e => {
+          e.currentTarget.style.borderColor = colors.border;
+          e.currentTarget.style.color = colors.textMuted;
+          e.currentTarget.style.background = 'transparent';
+        }}
+      >
+        <span style={{ fontSize: 18, lineHeight: 1 }}>＋</span>
+        <span>新增帳號</span>
+      </button>
     </div>
   );
 }
