@@ -5,6 +5,15 @@ const TYPE_META = {
   push_notification:{ label: 'Push 推播',     icon: '🔔', color: '#8b5cf6', bg: 'rgba(139,92,246,0.12)' },
   social_post:      { label: '社群貼文',       icon: '📱', color: '#10b981', bg: 'rgba(16,185,129,0.12)' },
   sms:              { label: 'SMS 簡訊',       icon: '💬', color: '#f59e0b', bg: 'rgba(245,158,11,0.12)' },
+  line_message:     { label: 'LINE 訊息',      icon: '💚', color: '#06b06a', bg: 'rgba(6,176,106,0.12)' },
+};
+
+const AARRR_META = {
+  acquisition: { label: '獲客', icon: '🎯', color: '#3b82f6', bg: 'rgba(59,130,246,0.15)' },
+  activation:  { label: '激活', icon: '🚀', color: '#8b5cf6', bg: 'rgba(139,92,246,0.15)' },
+  retention:   { label: '留存', icon: '⭐', color: '#f59e0b', bg: 'rgba(245,158,11,0.15)' },
+  revenue:     { label: '收入', icon: '💰', color: '#10b981', bg: 'rgba(16,185,129,0.15)' },
+  referral:    { label: '裂變', icon: '🔗', color: '#ef4444', bg: 'rgba(239,68,68,0.15)' },
 };
 
 const STATUS_META = {
@@ -53,6 +62,8 @@ export default function Marketing() {
   const [selectedCampaign, setSelectedCampaign] = useState(null);
   const [loading, setLoading] = useState(true);
   const [statusFilter, setStatusFilter] = useState('');
+  const [tplAarrr, setTplAarrr] = useState('all');
+  const [tplType, setTplType] = useState('all');
   const [showCreate, setShowCreate] = useState(false);
   const [newCampaign, setNewCampaign] = useState({ name: '', type: 'email_sequence', trigger_type: 'manual', audience_segment: 'all' });
 
@@ -292,34 +303,162 @@ export default function Marketing() {
 
       {/* === TEMPLATES TAB === */}
       {tab === 'templates' && (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 14 }}>
-          {templates.map(tpl => (
-            <div key={tpl.id} style={{ ...CARD, cursor: 'pointer', transition: 'border-color 0.15s' }}
-              onMouseEnter={e => (e.currentTarget.style.borderColor = '#3b82f6')}
-              onMouseLeave={e => (e.currentTarget.style.borderColor = '#2a2d3e')}
-            >
-              <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 12 }}>
-                <span style={{ fontSize: 28 }}>{tpl.icon}</span>
-                <div>
-                  <div style={{ fontSize: 13, fontWeight: 600, color: '#f9fafb' }}>{tpl.name}</div>
-                  <TypeBadge type={tpl.type} />
-                </div>
-              </div>
-              <p style={{ fontSize: 12, color: '#9ca3af', margin: '0 0 14px', lineHeight: 1.6 }}>{tpl.description}</p>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <span style={{ fontSize: 11, color: '#6b7280' }}>{tpl.steps} 個步驟 · {TRIGGER_LABELS[tpl.trigger] || tpl.trigger}</span>
-                <button onClick={() => {
-                  setNewCampaign({ name: tpl.name, type: tpl.type, trigger_type: tpl.trigger === 'scheduled' ? 'scheduled' : 'event_based', audience_segment: 'all' });
-                  setShowCreate(true);
-                }} style={{
-                  padding: '5px 12px', borderRadius: 6, border: 'none', fontSize: 12, fontWeight: 600,
-                  background: 'linear-gradient(90deg, #3b82f6, #8b5cf6)', color: '#fff', cursor: 'pointer',
-                }}>
-                  使用模板
-                </button>
-              </div>
+        <div>
+          {/* Filter row */}
+          <div style={{ display: 'flex', gap: 12, marginBottom: 16, flexWrap: 'wrap', alignItems: 'center' }}>
+            {/* AARRR stage filter */}
+            <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+              <span style={{ fontSize: 11, color: '#6b7280', marginRight: 2 }}>漏斗</span>
+              {[
+                { key: 'all', label: '全部', icon: '◉' },
+                ...Object.entries(AARRR_META).map(([k, m]) => ({ key: k, label: m.label, icon: m.icon })),
+              ].map(({ key, label, icon }) => {
+                const meta = AARRR_META[key];
+                const active = tplAarrr === key;
+                return (
+                  <button key={key} onClick={() => setTplAarrr(key)} style={{
+                    padding: '4px 12px', borderRadius: 20, border: `1px solid ${active && meta ? meta.color : '#2a2d3e'}`,
+                    background: active && meta ? meta.bg : 'transparent',
+                    color: active && meta ? meta.color : (active ? '#f9fafb' : '#9ca3af'),
+                    fontSize: 12, fontWeight: active ? 600 : 400, cursor: 'pointer',
+                    display: 'flex', alignItems: 'center', gap: 4,
+                  }}>
+                    {icon} {label}
+                  </button>
+                );
+              })}
             </div>
-          ))}
+            {/* Type filter */}
+            <div style={{ display: 'flex', gap: 6, alignItems: 'center', marginLeft: 8 }}>
+              <span style={{ fontSize: 11, color: '#6b7280', marginRight: 2 }}>類型</span>
+              {[
+                { key: 'all', label: '全部' },
+                ...Object.entries(TYPE_META).map(([k, m]) => ({ key: k, label: m.label })),
+              ].map(({ key, label }) => {
+                const meta = TYPE_META[key];
+                const active = tplType === key;
+                return (
+                  <button key={key} onClick={() => setTplType(key)} style={{
+                    padding: '4px 10px', borderRadius: 20, border: `1px solid ${active && meta ? meta.color : '#2a2d3e'}`,
+                    background: active && meta ? meta.bg : (active ? 'rgba(249,250,251,0.08)' : 'transparent'),
+                    color: active && meta ? meta.color : (active ? '#f9fafb' : '#9ca3af'),
+                    fontSize: 11, fontWeight: active ? 600 : 400, cursor: 'pointer',
+                  }}>
+                    {meta?.icon && `${meta.icon} `}{label}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Template count */}
+          {(() => {
+            const filtered = templates.filter(t =>
+              (tplAarrr === 'all' || t.aarrr === tplAarrr) &&
+              (tplType === 'all' || t.type === tplType)
+            );
+            return (
+              <div>
+                <div style={{ fontSize: 12, color: '#6b7280', marginBottom: 12 }}>
+                  顯示 {filtered.length} 個模板{tplAarrr !== 'all' || tplType !== 'all' ? `（已篩選，共 ${templates.length} 個）` : ''}
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 14 }}>
+                  {filtered.map(tpl => {
+                    const aarrrM = AARRR_META[tpl.aarrr] || {};
+                    const typeM = TYPE_META[tpl.type] || TYPE_META.email_sequence;
+                    return (
+                      <div key={tpl.id} style={{ ...CARD, cursor: 'default', transition: 'border-color 0.15s', display: 'flex', flexDirection: 'column' }}
+                        onMouseEnter={e => (e.currentTarget.style.borderColor = aarrrM.color || '#3b82f6')}
+                        onMouseLeave={e => (e.currentTarget.style.borderColor = '#2a2d3e')}
+                      >
+                        {/* Header: icon + name + AARRR badge */}
+                        <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10, marginBottom: 10 }}>
+                          <span style={{
+                            fontSize: 26, flexShrink: 0, width: 44, height: 44, borderRadius: 10,
+                            background: aarrrM.bg || 'rgba(59,130,246,0.1)',
+                            display: 'flex', alignItems: 'center', justifyContent: 'center',
+                          }}>{tpl.icon}</span>
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            <div style={{ fontSize: 13, fontWeight: 700, color: '#f9fafb', marginBottom: 5, lineHeight: 1.3 }}>{tpl.name}</div>
+                            <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap' }}>
+                              {aarrrM.label && (
+                                <span style={{
+                                  fontSize: 10, padding: '2px 7px', borderRadius: 20,
+                                  background: aarrrM.bg, color: aarrrM.color, fontWeight: 700, letterSpacing: '0.03em',
+                                }}>
+                                  {aarrrM.icon} {aarrrM.label}
+                                </span>
+                              )}
+                              <span style={{
+                                fontSize: 10, padding: '2px 7px', borderRadius: 20,
+                                background: typeM.bg, color: typeM.color, fontWeight: 600,
+                              }}>
+                                {typeM.icon} {typeM.label}
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Description */}
+                        <p style={{ fontSize: 12, color: '#9ca3af', margin: '0 0 10px', lineHeight: 1.6, flex: 1 }}>{tpl.description}</p>
+
+                        {/* Preview message */}
+                        {tpl.preview && (
+                          <div style={{
+                            background: '#0f1117', borderRadius: 8, padding: '8px 10px', marginBottom: 10,
+                            borderLeft: `3px solid ${aarrrM.color || '#3b82f6'}`,
+                            fontSize: 11, color: '#d1d5db', lineHeight: 1.5, fontStyle: 'italic',
+                          }}>
+                            {tpl.preview}
+                          </div>
+                        )}
+
+                        {/* Tags */}
+                        {tpl.tags?.length > 0 && (
+                          <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', marginBottom: 10 }}>
+                            {tpl.tags.map(tag => (
+                              <span key={tag} style={{
+                                fontSize: 10, padding: '1px 6px', borderRadius: 10,
+                                background: 'rgba(255,255,255,0.05)', color: '#6b7280', border: '1px solid #2a2d3e',
+                              }}>{tag}</span>
+                            ))}
+                          </div>
+                        )}
+
+                        {/* Footer */}
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderTop: '1px solid #1e2035', paddingTop: 10, marginTop: 'auto' }}>
+                          <span style={{ fontSize: 11, color: '#6b7280' }}>
+                            {tpl.steps} 個步驟 · {TRIGGER_LABELS[tpl.trigger] || tpl.trigger}
+                          </span>
+                          <button onClick={() => {
+                            setNewCampaign({
+                              name: tpl.name,
+                              type: tpl.type === 'line_message' ? 'sms' : tpl.type,
+                              trigger_type: tpl.trigger === 'scheduled' ? 'scheduled' : tpl.trigger === 'user_signup' ? 'event_based' : 'event_based',
+                              audience_segment: 'all',
+                            });
+                            setTab('campaigns');
+                            setShowCreate(true);
+                          }} style={{
+                            padding: '4px 12px', borderRadius: 6, border: 'none', fontSize: 11, fontWeight: 600,
+                            background: `linear-gradient(90deg, ${aarrrM.color || '#3b82f6'}, ${typeM.color || '#8b5cf6'})`,
+                            color: '#fff', cursor: 'pointer', whiteSpace: 'nowrap',
+                          }}>
+                            使用模板
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+                {filtered.length === 0 && (
+                  <div style={{ textAlign: 'center', padding: '48px 0', color: '#6b7280', fontSize: 14 }}>
+                    此篩選條件下沒有模板
+                  </div>
+                )}
+              </div>
+            );
+          })()}
         </div>
       )}
 
