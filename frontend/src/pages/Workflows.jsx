@@ -81,10 +81,44 @@ function CreateModal({ onClose, onCreate }) {
   const [category, setCategory] = useState('acquisition');
   const [description, setDescription] = useState('');
   const [trigger, setTrigger] = useState('user_signup');
+  const [triggerConfig, setTriggerConfig] = useState({ condition: 'churn_risk', threshold: 60, frequency: 'daily', time: '09:00', event: 'order_status_change' });
   const [prompt, setPrompt] = useState('');
   const [aiLoading, setAiLoading] = useState(false);
   const [aiActions, setAiActions] = useState([]);
   const [saving, setSaving] = useState(false);
+
+  const TRIGGER_META = {
+    user_signup: {
+      icon: '👤', label: 'User Signup', color: '#3b82f6',
+      desc: '新用戶完成註冊、或加 LINE / WhatsApp 好友的瞬間自動觸發。',
+      example: '用戶加入你的 LINE 官方帳號 → 立即發送歡迎訊息 + 建立 CRM 記錄',
+      configType: 'delay',
+    },
+    ai_trigger: {
+      icon: '🤖', label: 'AI Trigger', color: '#8b5cf6',
+      desc: 'AI 持續監測所有用戶行為與指標，當符合設定條件時自動觸發。',
+      example: 'AI 偵測到某用戶 30 天未互動且流失機率 > 70% → 自動啟動喚回序列',
+      configType: 'ai_condition',
+    },
+    scheduled: {
+      icon: '🕐', label: 'Scheduled', color: '#10b981',
+      desc: '按照固定時間表定期執行，適合每日 / 每週的常規維護任務。',
+      example: '每天早上 9:00 → 檢查今日生日會員 → 發送生日祝賀與積分禮品',
+      configType: 'schedule',
+    },
+    webhook: {
+      icon: '🔗', label: 'Webhook', color: '#f59e0b',
+      desc: '接收外部平台（LINE / 訂單系統 / 支付平台）的即時事件通知後觸發。',
+      example: 'Shopify 訂單狀態更新 → Webhook 到此 → AI 自動發送物流通知給客戶',
+      configType: 'webhook_event',
+    },
+    manual: {
+      icon: '▶️', label: 'Manual', color: '#6b7280',
+      desc: '需要時手動在 Workflow 列表點擊「▶ Run」按鈕執行，適合一次性操作或測試。',
+      example: '大促前手動批量發送優惠訊息 / 測試新 Workflow 的執行效果',
+      configType: null,
+    },
+  };
 
   async function handleAISuggest() {
     if (!prompt.trim()) return;
@@ -128,7 +162,7 @@ function CreateModal({ onClose, onCreate }) {
     }
   }
 
-  const TRIGGERS = ['user_signup', 'ai_trigger', 'scheduled', 'webhook', 'manual'];
+  const TRIGGERS = Object.keys(TRIGGER_META);
 
   return (
     <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.75)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}
@@ -170,19 +204,135 @@ function CreateModal({ onClose, onCreate }) {
           </div>
 
           <div>
-            <label style={{ fontSize: 11, color: '#6b7280', letterSpacing: '0.06em', textTransform: 'uppercase', display: 'block', marginBottom: 6 }}>觸發器</label>
-            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-              {TRIGGERS.map(t => (
-                <button key={t} onClick={() => setTrigger(t)} style={{
-                  padding: '6px 14px', borderRadius: 20, cursor: 'pointer', fontSize: 12, fontWeight: trigger === t ? 600 : 400,
-                  background: trigger === t ? 'rgba(59,130,246,0.2)' : '#12151f',
-                  border: `1px solid ${trigger === t ? '#3b82f6' : '#2a2d3e'}`,
-                  color: trigger === t ? '#60a5fa' : '#9ca3af',
-                }}>
-                  {TRIGGER_ICONS[t]} {t.replace(/_/g, ' ')}
-                </button>
-              ))}
+            <label style={{ fontSize: 11, color: '#6b7280', letterSpacing: '0.06em', textTransform: 'uppercase', display: 'block', marginBottom: 8 }}>觸發器 — 何時執行此 Workflow？</label>
+
+            {/* Trigger selector pills */}
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 12 }}>
+              {TRIGGERS.map(t => {
+                const meta = TRIGGER_META[t];
+                const isActive = trigger === t;
+                return (
+                  <button key={t} onClick={() => setTrigger(t)} style={{
+                    padding: '7px 16px', borderRadius: 20, cursor: 'pointer', fontSize: 12,
+                    fontWeight: isActive ? 700 : 400,
+                    background: isActive ? `rgba(${meta.color === '#3b82f6' ? '59,130,246' : meta.color === '#8b5cf6' ? '139,92,246' : meta.color === '#10b981' ? '16,185,129' : meta.color === '#f59e0b' ? '245,158,11' : '107,114,128'},0.18)` : '#12151f',
+                    border: `1.5px solid ${isActive ? meta.color : '#2a2d3e'}`,
+                    color: isActive ? meta.color : '#9ca3af',
+                    display: 'flex', alignItems: 'center', gap: 5,
+                    transition: 'all 0.15s',
+                  }}>
+                    <span>{meta.icon}</span>
+                    <span>{meta.label}</span>
+                  </button>
+                );
+              })}
             </div>
+
+            {/* Selected trigger: description card + config */}
+            {(() => {
+              const meta = TRIGGER_META[trigger];
+              if (!meta) return null;
+              return (
+                <div style={{ background: '#0f1117', border: `1px solid ${meta.color}30`, borderLeft: `3px solid ${meta.color}`, borderRadius: 10, padding: '14px 16px', display: 'flex', flexDirection: 'column', gap: 10 }}>
+                  {/* Description */}
+                  <div>
+                    <div style={{ fontSize: 13, color: '#e5e7eb', fontWeight: 500, marginBottom: 4 }}>{meta.desc}</div>
+                    <div style={{ fontSize: 11, color: '#6b7280', display: 'flex', alignItems: 'flex-start', gap: 5 }}>
+                      <span style={{ color: meta.color, flexShrink: 0 }}>💡</span>
+                      <span>{meta.example}</span>
+                    </div>
+                  </div>
+
+                  {/* AI Trigger config */}
+                  {meta.configType === 'ai_condition' && (
+                    <div style={{ borderTop: '1px solid #1e2035', paddingTop: 10 }}>
+                      <div style={{ fontSize: 11, color: '#6b7280', letterSpacing: '0.05em', textTransform: 'uppercase', marginBottom: 8 }}>AI 觸發條件</div>
+                      <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+                        <select value={triggerConfig.condition || 'churn_risk'} onChange={e => setTriggerConfig(p => ({ ...p, condition: e.target.value }))} style={{ padding: '7px 10px', borderRadius: 8, background: '#1a1d2e', border: '1px solid #2a2d3e', color: '#e5e7eb', fontSize: 12, cursor: 'pointer', outline: 'none' }}>
+                          <option value="churn_risk">流失機率 ＞</option>
+                          <option value="inactive_days">未互動天數 ＞</option>
+                          <option value="total_spend">累計消費達到</option>
+                          <option value="points_reached">積分達到</option>
+                          <option value="purchase_intent">購買意向分數 ＞</option>
+                        </select>
+                        <input type="number" value={triggerConfig.threshold ?? 60} onChange={e => setTriggerConfig(p => ({ ...p, threshold: Number(e.target.value) }))} min={1} max={100}
+                          style={{ width: 70, padding: '7px 10px', borderRadius: 8, background: '#1a1d2e', border: '1px solid #2a2d3e', color: '#e5e7eb', fontSize: 12, outline: 'none' }} />
+                        <span style={{ fontSize: 12, color: '#6b7280' }}>
+                          {{ churn_risk: '%', inactive_days: '天', total_spend: 'NT$', points_reached: '點', purchase_intent: '分' }[triggerConfig.condition || 'churn_risk']}
+                        </span>
+                      </div>
+                      <div style={{ fontSize: 10, color: '#4b5563', marginTop: 6 }}>
+                        AI 每小時掃描一次所有聯絡人，符合條件即觸發此 Workflow
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Scheduled config */}
+                  {meta.configType === 'schedule' && (
+                    <div style={{ borderTop: '1px solid #1e2035', paddingTop: 10 }}>
+                      <div style={{ fontSize: 11, color: '#6b7280', letterSpacing: '0.05em', textTransform: 'uppercase', marginBottom: 8 }}>排程設定</div>
+                      <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+                        <select value={triggerConfig.frequency || 'daily'} onChange={e => setTriggerConfig(p => ({ ...p, frequency: e.target.value }))} style={{ padding: '7px 10px', borderRadius: 8, background: '#1a1d2e', border: '1px solid #2a2d3e', color: '#e5e7eb', fontSize: 12, cursor: 'pointer', outline: 'none' }}>
+                          <option value="daily">每天</option>
+                          <option value="weekly_mon">每週一</option>
+                          <option value="weekly_fri">每週五</option>
+                          <option value="monthly_1">每月 1 日</option>
+                          <option value="monthly_15">每月 15 日</option>
+                        </select>
+                        <input type="time" value={triggerConfig.time || '09:00'} onChange={e => setTriggerConfig(p => ({ ...p, time: e.target.value }))}
+                          style={{ padding: '7px 10px', borderRadius: 8, background: '#1a1d2e', border: '1px solid #2a2d3e', color: '#e5e7eb', fontSize: 12, outline: 'none' }} />
+                        <span style={{ fontSize: 11, color: '#6b7280' }}>台灣時間 (UTC+8)</span>
+                      </div>
+                      <div style={{ fontSize: 10, color: '#4b5563', marginTop: 6 }}>
+                        系統將在設定時間自動執行，適合生日禮遇、週報、沉默用戶掃描等任務
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Webhook event config */}
+                  {meta.configType === 'webhook_event' && (
+                    <div style={{ borderTop: '1px solid #1e2035', paddingTop: 10 }}>
+                      <div style={{ fontSize: 11, color: '#6b7280', letterSpacing: '0.05em', textTransform: 'uppercase', marginBottom: 8 }}>Webhook 事件來源</div>
+                      <select value={triggerConfig.event || 'order_status_change'} onChange={e => setTriggerConfig(p => ({ ...p, event: e.target.value }))} style={{ width: '100%', padding: '8px 10px', borderRadius: 8, background: '#1a1d2e', border: '1px solid #2a2d3e', color: '#e5e7eb', fontSize: 12, cursor: 'pointer', outline: 'none', marginBottom: 8 }}>
+                        <option value="order_status_change">📦 訂單狀態變更（Shopify / 蝦皮 / TikTok Shop）</option>
+                        <option value="message_received">💬 收到新訊息（LINE / WhatsApp / Telegram）</option>
+                        <option value="user_follow">👤 用戶加好友 / 訂閱（LINE / Instagram）</option>
+                        <option value="payment_complete">💳 付款完成（綠界 / 藍新 / Stripe）</option>
+                        <option value="cart_abandoned">🛒 購物車放棄（Shopify）</option>
+                        <option value="form_submit">📝 表單提交 / 活動報名</option>
+                        <option value="custom">⚙️ 自訂事件</option>
+                      </select>
+                      <div style={{ background: '#1a1d2e', borderRadius: 8, padding: '8px 12px', display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <span style={{ fontSize: 11, color: '#6b7280', flexShrink: 0 }}>Webhook URL</span>
+                        <code style={{ fontSize: 10, color: '#22d3ee', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          https://ai-growthos-enterprise-production.up.railway.app/api/comms/webhook/{triggerConfig.event || 'order_status_change'}
+                        </code>
+                      </div>
+                      <div style={{ fontSize: 10, color: '#4b5563', marginTop: 6 }}>
+                        複製上方 URL 貼到對應平台的 Webhook 設定中，即可接收即時事件
+                      </div>
+                    </div>
+                  )}
+
+                  {/* User signup delay */}
+                  {meta.configType === 'delay' && (
+                    <div style={{ borderTop: '1px solid #1e2035', paddingTop: 10 }}>
+                      <div style={{ fontSize: 11, color: '#6b7280', letterSpacing: '0.05em', textTransform: 'uppercase', marginBottom: 8 }}>觸發延遲</div>
+                      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                        {[['0', '立即執行'], ['5', '5 分鐘後'], ['30', '30 分鐘後'], ['60', '1 小時後']].map(([val, label]) => (
+                          <button key={val} onClick={() => setTriggerConfig(p => ({ ...p, delay_minutes: val }))} style={{
+                            padding: '5px 12px', borderRadius: 20, cursor: 'pointer', fontSize: 11,
+                            background: (triggerConfig.delay_minutes || '0') === val ? 'rgba(59,130,246,0.2)' : '#1a1d2e',
+                            border: `1px solid ${(triggerConfig.delay_minutes || '0') === val ? '#3b82f6' : '#2a2d3e'}`,
+                            color: (triggerConfig.delay_minutes || '0') === val ? '#60a5fa' : '#6b7280',
+                          }}>{label}</button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
           </div>
 
           <div style={{ background: '#0f1117', border: '1px solid #2a2d3e', borderRadius: 10, padding: 16 }}>
