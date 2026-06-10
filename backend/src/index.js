@@ -44,6 +44,7 @@ try {
 }
 
 // Routes (loaded after DB is ready)
+const { requireAuth, optionalAuth } = require('./middleware/auth');
 const dashboardRouter = require('./routes/dashboard');
 const agentsRouter = require('./routes/agents');
 const contentRouter = require('./routes/content');
@@ -55,16 +56,18 @@ const aiRulesRouter = require('./routes/ai-rules');
 const marketingRouter = require('./routes/marketing');
 const analyticsRouter = require('./routes/analytics');
 
-app.use('/api/dashboard', dashboardRouter);
-app.use('/api/agents', agentsRouter);
-app.use('/api/content', contentRouter);
-app.use('/api/crm', crmRouter);
-app.use('/api/workflows', workflowsRouter);
-app.use('/api/comms', commsRouter);
-app.use('/api/orders', ordersRouter);
-app.use('/api/ai-rules', aiRulesRouter);
-app.use('/api/marketing', marketingRouter);
-app.use('/api/analytics', analyticsRouter);
+// Dashboard and analytics are read-only stats — optionalAuth so the sidebar can poll without a token
+app.use('/api/dashboard', optionalAuth, dashboardRouter);
+app.use('/api/analytics', optionalAuth, analyticsRouter);
+// All mutation routes require a valid Firebase token
+app.use('/api/agents', requireAuth, agentsRouter);
+app.use('/api/content', requireAuth, contentRouter);
+app.use('/api/crm', requireAuth, crmRouter);
+app.use('/api/workflows', requireAuth, workflowsRouter);
+app.use('/api/comms', requireAuth, commsRouter);
+app.use('/api/orders', requireAuth, ordersRouter);
+app.use('/api/ai-rules', requireAuth, aiRulesRouter);
+app.use('/api/marketing', requireAuth, marketingRouter);
 
 // Serve frontend build if dist exists (works in any NODE_ENV)
 const frontendBuild = path.join(__dirname, '..', '..', 'frontend', 'dist');

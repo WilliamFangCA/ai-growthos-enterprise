@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { NavLink } from 'react-router-dom';
-import { signInWithGoogle, signOutUser } from '../firebase.js';
+import { NavLink, useNavigate } from 'react-router-dom';
+import { signOutUser } from '../firebase.js';
 import { useAuth } from '../main.jsx';
 import { useUISettings } from '../contexts/UISettingsContext.jsx';
 import ModelSettingsPanel from './ModelSettingsPanel.jsx';
@@ -9,32 +9,32 @@ const NAV_SECTIONS = [
   {
     labelKey: 'core',
     items: [
-      { to: '/dashboard',  labelKey: 'dashboard',      icon: '📊' },
-      { to: '/agents',     labelKey: 'aiAgents',       icon: '🤖' },
-      { to: '/analytics',  labelKey: 'analytics',      icon: '📈' },
+      { to: '/app/dashboard',  labelKey: 'dashboard',      icon: '📊' },
+      { to: '/app/agents',     labelKey: 'aiAgents',       icon: '🤖' },
+      { to: '/app/analytics',  labelKey: 'analytics',      icon: '📈' },
     ],
   },
   {
     labelKey: 'growth',
     items: [
-      { to: '/content',    labelKey: 'contentFactory', icon: '✍️' },
-      { to: '/marketing',  labelKey: 'marketing',      icon: '🎯' },
-      { to: '/comms',      labelKey: 'commHub',        icon: '💬', badgeKey: 'unread' },
-      { to: '/ai-rules',   labelKey: 'aiAutoReply',    icon: '⚡' },
+      { to: '/app/content',    labelKey: 'contentFactory', icon: '✍️' },
+      { to: '/app/marketing',  labelKey: 'marketing',      icon: '🎯' },
+      { to: '/app/comms',      labelKey: 'commHub',        icon: '💬', badgeKey: 'unread' },
+      { to: '/app/ai-rules',   labelKey: 'aiAutoReply',    icon: '⚡' },
     ],
   },
   {
     labelKey: 'sales',
     items: [
-      { to: '/orders',     labelKey: 'orders',     icon: '📦', badgeKey: 'pendingOrders' },
-      { to: '/crm',        labelKey: 'crm',        icon: '👥' },
-      { to: '/workflows',  labelKey: 'workflows',  icon: '🔄' },
+      { to: '/app/orders',     labelKey: 'orders',     icon: '📦', badgeKey: 'pendingOrders' },
+      { to: '/app/crm',        labelKey: 'crm',        icon: '👥' },
+      { to: '/app/workflows',  labelKey: 'workflows',  icon: '🔄' },
     ],
   },
   {
     labelKey: 'system',
     items: [
-      { to: '/settings',   labelKey: 'settings',   icon: '⚙️' },
+      { to: '/app/settings',   labelKey: 'settings',   icon: '⚙️' },
     ],
   },
 ];
@@ -42,6 +42,7 @@ const NAV_SECTIONS = [
 export default function Sidebar() {
   const { user } = useAuth() || {};
   const { t } = useUISettings();
+  const navigate = useNavigate();
   const [autoStatus, setAutoStatus] = useState({ status: 'unknown', currentPhase: '' });
   const [badges, setBadges] = useState({ unread: 0, pendingOrders: 0 });
 
@@ -238,7 +239,7 @@ export default function Sidebar() {
           </div>
         ) : (
           <button
-            onClick={() => signInWithGoogle().catch(e => console.warn('Login failed:', e.message))}
+            onClick={() => navigate('/login')}
             style={{
               width: '100%', padding: '8px 12px', borderRadius: 6, border: 'none', cursor: 'pointer',
               background: 'linear-gradient(90deg, rgba(59,130,246,0.2), rgba(139,92,246,0.2))',
@@ -246,7 +247,7 @@ export default function Sidebar() {
               justifyContent: 'center', gap: 6
             }}
           >
-            <span>G</span> Sign in with Google
+            🔐 登入帳號
           </button>
         )}
       </div>
