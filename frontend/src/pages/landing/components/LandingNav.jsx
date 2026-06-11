@@ -28,15 +28,15 @@ export default function LandingNav() {
       <div style={{ maxWidth: 1200, margin: '0 auto', padding: '0 24px', display: 'flex', alignItems: 'center', height: 64, gap: 32 }}>
         {/* Logo */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer', flexShrink: 0 }} onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}>
-          <div style={{ width: 32, height: 32, borderRadius: 8, background: 'linear-gradient(135deg, #3b82f6, #8b5cf6)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 16 }}>🚀</div>
+          <div style={{ width: 32, height: 32, borderRadius: 8, background: 'linear-gradient(135deg, #00b962, #059669)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 16 }}>🚀</div>
           <div>
             <div style={{ fontWeight: 700, fontSize: 14, color: '#f9fafb', lineHeight: 1.1 }}>AI GrowthOS</div>
-            <div style={{ fontSize: 9, color: '#6b7280', letterSpacing: '0.08em' }}>ENTERPRISE</div>
+            <div style={{ fontSize: 9, color: '#6b7280', letterSpacing: '0.08em' }}>LINE 賣家專用</div>
           </div>
         </div>
 
         {/* Desktop nav links */}
-        <div style={{ display: 'flex', gap: 4, flex: 1 }} className="desktop-nav">
+        <div style={{ display: 'flex', gap: 4, flex: 1 }}>
           {[['features', '功能特色'], ['pricing', '定價方案'], ['testimonials', '客戶評價']].map(([id, label]) => (
             <button key={id} onClick={() => scrollTo(id)} style={{
               background: 'none', border: 'none', cursor: 'pointer', padding: '6px 14px',
@@ -52,7 +52,7 @@ export default function LandingNav() {
         </div>
 
         {/* CTA buttons */}
-        <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexShrink: 0 }} className="desktop-nav">
+        <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexShrink: 0 }}>
           <button onClick={() => navigate('/login')} style={{
             padding: '7px 18px', borderRadius: 8, border: '1px solid #2a2d3e',
             background: 'transparent', color: '#e5e7eb', fontSize: 13, fontWeight: 500, cursor: 'pointer',
@@ -61,17 +61,18 @@ export default function LandingNav() {
           </button>
           <button onClick={() => navigate('/signup')} style={{
             padding: '7px 18px', borderRadius: 8, border: 'none',
-            background: 'linear-gradient(90deg, #3b82f6, #6366f1)', color: '#fff', fontSize: 13, fontWeight: 600, cursor: 'pointer',
+            background: 'linear-gradient(90deg, #00b962, #059669)', color: '#fff', fontSize: 13, fontWeight: 600, cursor: 'pointer',
+            boxShadow: '0 0 16px rgba(0,185,98,0.3)',
           }}>
-            免費開始
+            免費試用 14 天
           </button>
         </div>
 
         {/* Mobile hamburger */}
         <button
           onClick={() => setMenuOpen(o => !o)}
-          className="mobile-menu-btn"
           style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#9ca3af', fontSize: 22, marginLeft: 'auto', display: 'none' }}
+          className="mobile-menu-btn"
         >
           {menuOpen ? '✕' : '☰'}
         </button>
@@ -87,7 +88,7 @@ export default function LandingNav() {
           ))}
           <div style={{ display: 'flex', gap: 10, marginTop: 16 }}>
             <button onClick={() => navigate('/login')} style={{ flex: 1, padding: '10px', borderRadius: 8, border: '1px solid #2a2d3e', background: 'transparent', color: '#e5e7eb', fontSize: 14, cursor: 'pointer' }}>登入</button>
-            <button onClick={() => navigate('/signup')} style={{ flex: 1, padding: '10px', borderRadius: 8, border: 'none', background: 'linear-gradient(90deg, #3b82f6, #6366f1)', color: '#fff', fontSize: 14, fontWeight: 600, cursor: 'pointer' }}>免費開始</button>
+            <button onClick={() => navigate('/signup')} style={{ flex: 1, padding: '10px', borderRadius: 8, border: 'none', background: 'linear-gradient(90deg, #00b962, #059669)', color: '#fff', fontSize: 14, fontWeight: 600, cursor: 'pointer' }}>免費試用</button>
           </div>
         </div>
       )}

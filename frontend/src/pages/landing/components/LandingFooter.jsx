@@ -38,14 +38,14 @@ export default function LandingFooter() {
           {/* Brand column */}
           <div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16 }}>
-              <div style={{ width: 32, height: 32, borderRadius: 8, background: 'linear-gradient(135deg, #3b82f6, #8b5cf6)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 16 }}>🚀</div>
+              <div style={{ width: 32, height: 32, borderRadius: 8, background: 'linear-gradient(135deg, #00b962, #059669)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 16 }}>🚀</div>
               <div>
                 <div style={{ fontWeight: 700, fontSize: 14, color: '#f9fafb' }}>AI GrowthOS</div>
-                <div style={{ fontSize: 10, color: '#6b7280', letterSpacing: '0.08em' }}>ENTERPRISE</div>
+                <div style={{ fontSize: 10, color: '#6b7280', letterSpacing: '0.08em' }}>LINE 賣家專用</div>
               </div>
             </div>
             <p style={{ fontSize: 13, color: '#6b7280', lineHeight: 1.7, maxWidth: 240, marginBottom: 20 }}>
-              AI 驅動的企業成長作業系統。整合行銷、通訊、內容、工作流程，讓您的品牌自動成長。
+              你睡覺，LINE 幫你賺錢。台灣 LINE 賣家專用 AI 銷售自動化平台。
             </p>
             {/* Social icons */}
             <div style={{ display: 'flex', gap: 10 }}>
@@ -81,7 +81,7 @@ export default function LandingFooter() {
         {/* Bottom bar */}
         <div style={{ borderTop: '1px solid #1a1d2e', paddingTop: 24, display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12 }}>
           <p style={{ fontSize: 12, color: '#4b5563' }}>
-            © 2025 AI GrowthOS Enterprise. All rights reserved.
+            © 2026 AI GrowthOS. 專為台灣 LINE 賣家打造. All rights reserved.
           </p>
           <div style={{ display: 'flex', gap: 16 }}>
             <button onClick={() => navigate('/signup')} style={{ fontSize: 12, color: '#3b82f6', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>

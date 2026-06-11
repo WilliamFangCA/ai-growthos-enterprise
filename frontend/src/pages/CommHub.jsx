@@ -1,6 +1,7 @@
 ﻿import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { apiFetch } from '../utils/apiClient.js';
 import PlatformIcon from '../components/PlatformIcon.jsx';
+import CommHubOnboarding from './CommHubOnboarding.jsx';
 
 const PLATFORM_META = {
   line:      { label: 'LINE',      color: 'bg-green-500',  text: 'text-green-600',  icon: '💬' },
@@ -56,6 +57,7 @@ export default function CommHub() {
   const [simLoading, setSimLoading] = useState(false);
   const [simResult, setSimResult] = useState(null);
   const [refreshing, setRefreshing] = useState(false);
+  const [showOnboarding, setShowOnboarding] = useState(false);
   const messagesEndRef = useRef(null);
 
   useEffect(() => { loadStats(); loadAccounts(); }, []);
@@ -80,8 +82,20 @@ export default function CommHub() {
   async function loadAccounts() {
     try {
       const r = await apiFetch('/api/comms/accounts');
-      if (r.ok) setAccounts(await r.json());
+      if (r.ok) {
+        const data = await r.json();
+        setAccounts(data);
+        if (data.length === 0 && !localStorage.getItem('comms_onboarding_done')) {
+          setShowOnboarding(true);
+        }
+      }
     } catch {}
+  }
+
+  function completeOnboarding() {
+    localStorage.setItem('comms_onboarding_done', '1');
+    setShowOnboarding(false);
+    loadAccounts();
   }
 
   async function loadConvos() {
@@ -202,6 +216,7 @@ export default function CommHub() {
 
   return (
     <div className="h-full flex flex-col">
+      {showOnboarding && <CommHubOnboarding onComplete={completeOnboarding} />}
       {/* Header */}
       <div className="flex items-center justify-between mb-4">
         <div>
@@ -232,8 +247,12 @@ export default function CommHub() {
             {label}
           </button>
         ))}
+        <button onClick={() => setShowOnboarding(true)} title="設定指南"
+          className="mb-1 px-3 py-1 rounded-lg text-xs font-medium text-green-600 bg-green-50 hover:bg-green-100 border border-green-200 transition-colors">
+          🚀 設定指南
+        </button>
         <button onClick={refreshAll} title="刷新"
-          className={`ml-auto mb-1 p-1.5 rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors ${refreshing ? 'animate-spin' : ''}`}>
+          className={`ml-2 mb-1 p-1.5 rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors ${refreshing ? 'animate-spin' : ''}`}>
           ↻
         </button>
       </div>
