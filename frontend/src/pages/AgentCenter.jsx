@@ -500,7 +500,7 @@ export default function AgentCenter() {
           <span style={{ fontSize: 24 }}>⚠️</span>
           <div>
             <div style={{ color: '#f87171', fontWeight: 600, marginBottom: 4 }}>無法連接後端 API</div>
-            <div style={{ color: '#6b7280', fontSize: 13 }}>錯誤：{fetchError} — 請確認後端服務在 localhost:4000 運行</div>
+            <div style={{ color: '#6b7280', fontSize: 13 }}>錯誤：{fetchError} — 請稍後重試或聯繫支援</div>
           </div>
           <button onClick={loadAgents}
             style={{ marginLeft: 'auto', padding: '6px 14px', borderRadius: 7, border: '1px solid rgba(239,68,68,0.4)',
