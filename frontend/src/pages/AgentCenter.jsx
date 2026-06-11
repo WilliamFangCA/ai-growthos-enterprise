@@ -1,4 +1,5 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+﻿import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { apiFetch } from '../utils/apiClient.js';
 import { useModelSettings } from '../contexts/ModelSettings.jsx';
 import { processFile, formatFileSize, FILE_ICON } from '../utils/fileReader.js';
 
@@ -156,7 +157,7 @@ function InvokeModal({ agent, onClose }) {
       const imageAttachments = attachments.filter(a => a.type === 'image');
       const fullTask = task + buildFileContext();
 
-      const res = await fetch('/api/agents/invoke', {
+      const res = await apiFetch('/api/agents/invoke', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -318,7 +319,7 @@ function CreateAgentModal({ onClose, onCreated }) {
     }
     setSaving(true); setErr('');
     try {
-      const res = await fetch('/api/agents/custom', {
+      const res = await apiFetch('/api/agents/custom', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(form),
@@ -451,7 +452,7 @@ export default function AgentCenter() {
   function loadAgents() {
     setLoading(true);
     setFetchError('');
-    fetch('/api/agents')
+    apiFetch('/api/agents')
       .then(r => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); })
       .then(data => { setAgents(Array.isArray(data) ? data : []); setLoading(false); })
       .catch(err => { setFetchError(err.message); setLoading(false); });
@@ -551,3 +552,4 @@ export default function AgentCenter() {
     </div>
   );
 }
+

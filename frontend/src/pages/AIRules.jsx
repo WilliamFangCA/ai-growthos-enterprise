@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from 'react';
+﻿import React, { useState, useEffect } from 'react';
+import { apiFetch } from '../utils/apiClient.js';
 
 const TRIGGER_TYPES = [
   { value: 'acquisition',    label: '獲客節點',   icon: '🎯', desc: '首次加好友/追蹤/訂閱時觸發' },
@@ -52,14 +53,14 @@ export default function AIRules() {
 
   async function loadRules() {
     try {
-      const r = await fetch('/api/ai-rules');
+      const r = await apiFetch('/api/ai-rules');
       if (r.ok) setRules(await r.json());
     } catch {}
   }
 
   async function loadStats() {
     try {
-      const r = await fetch('/api/ai-rules/stats');
+      const r = await apiFetch('/api/ai-rules/stats');
       if (r.ok) setStats(await r.json());
     } catch {}
   }
@@ -68,7 +69,7 @@ export default function AIRules() {
     const url = editRule ? `/api/ai-rules/${editRule.id}` : '/api/ai-rules';
     const method = editRule ? 'PUT' : 'POST';
     try {
-      const r = await fetch(url, {
+      const r = await apiFetch(url, {
         method,
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ ...form, is_active: form.is_active ? 1 : 0 }),
@@ -85,13 +86,13 @@ export default function AIRules() {
 
   async function deleteRule(id) {
     if (!confirm('確認刪除此規則？')) return;
-    await fetch(`/api/ai-rules/${id}`, { method: 'DELETE' });
+    await apiFetch(`/api/ai-rules/${id}`, { method: 'DELETE' });
     loadRules();
     loadStats();
   }
 
   async function toggleActive(rule) {
-    await fetch(`/api/ai-rules/${rule.id}`, {
+    await apiFetch(`/api/ai-rules/${rule.id}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ is_active: rule.is_active ? 0 : 1 }),
@@ -106,7 +107,7 @@ export default function AIRules() {
     try {
       let ctx = {};
       try { ctx = JSON.parse(testContext); } catch { ctx = {}; }
-      const r = await fetch('/api/ai-rules/test', {
+      const r = await apiFetch('/api/ai-rules/test', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ rule_id: testRule.id, context: ctx }),
@@ -362,3 +363,4 @@ export default function AIRules() {
     </div>
   );
 }
+

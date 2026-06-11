@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from 'react';
+﻿import React, { useState, useEffect } from 'react';
+import { apiFetch } from '../utils/apiClient.js';
 
 const CONTENT_TYPES = [
   {
@@ -59,7 +60,7 @@ export default function ContentFactory() {
   }, []);
 
   const fetchHistory = () => {
-    fetch('/api/content/history')
+    apiFetch('/api/content/history')
       .then(r => r.json())
       .then(data => {
         setHistory(Array.isArray(data) ? data : []);
@@ -77,7 +78,7 @@ export default function ContentFactory() {
       const body = { type: selectedType, prompt };
       if (platform) body.platform = platform;
 
-      const res = await fetch('/api/content/generate', {
+      const res = await apiFetch('/api/content/generate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
@@ -386,3 +387,4 @@ export default function ContentFactory() {
     </div>
   );
 }
+

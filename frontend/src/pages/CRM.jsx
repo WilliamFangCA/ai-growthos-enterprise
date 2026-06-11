@@ -1,4 +1,5 @@
-import React, { useState, useEffect, useCallback } from 'react';
+﻿import React, { useState, useEffect, useCallback } from 'react';
+import { apiFetch } from '../utils/apiClient.js';
 
 const STAGE_CONFIG = {
   new:     { label: 'New',     color: '#3b82f6', bg: 'rgba(59,130,246,0.12)'  },
@@ -108,7 +109,7 @@ export default function CRM() {
     const params = new URLSearchParams();
     if (search) params.set('search', search);
     if (stage) params.set('stage', stage);
-    fetch(`/api/crm/contacts?${params.toString()}`)
+    apiFetch(`/api/crm/contacts?${params.toString()}`)
       .then(r => r.json())
       .then(data => { setContacts(Array.isArray(data) ? data : []); setLoading(false); })
       .catch(() => setLoading(false));
@@ -116,7 +117,7 @@ export default function CRM() {
 
   const fetchMembers = useCallback(() => {
     setMembersLoading(true);
-    fetch('/api/crm/members')
+    apiFetch('/api/crm/members')
       .then(r => r.json())
       .then(data => {
         const arr = Array.isArray(data) ? data : [];
@@ -130,7 +131,7 @@ export default function CRM() {
   }, []);
 
   useEffect(() => {
-    fetch('/api/crm/rfm').then(r => r.json()).then(setRfm).catch(() => {});
+    apiFetch('/api/crm/rfm').then(r => r.json()).then(setRfm).catch(() => {});
     fetchMembers();
   }, [fetchMembers]);
 
@@ -139,7 +140,7 @@ export default function CRM() {
   const handleAddContact = async () => {
     if (!newContact.name.trim()) return;
     try {
-      const res = await fetch('/api/crm/contacts', {
+      const res = await apiFetch('/api/crm/contacts', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(newContact),
       });
@@ -484,3 +485,4 @@ export default function CRM() {
     </div>
   );
 }
+

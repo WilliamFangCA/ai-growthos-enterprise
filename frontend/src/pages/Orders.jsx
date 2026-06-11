@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from 'react';
+﻿import React, { useState, useEffect } from 'react';
+import { apiFetch } from '../utils/apiClient.js';
 
 const STATUS_META = {
   pending:            { label: '待付款',   color: 'bg-yellow-100 text-yellow-700',  icon: '⏳' },
@@ -56,7 +57,7 @@ export default function Orders() {
 
   async function loadStats() {
     try {
-      const r = await fetch('/api/orders/stats');
+      const r = await apiFetch('/api/orders/stats');
       if (r.ok) setStats(await r.json());
     } catch {}
   }
@@ -66,7 +67,7 @@ export default function Orders() {
       let url = `/api/orders?page=${page}&limit=15`;
       if (filterStatus) url += `&status=${filterStatus}`;
       if (filterPlatform) url += `&platform=${filterPlatform}`;
-      const r = await fetch(url);
+      const r = await apiFetch(url);
       if (r.ok) {
         const data = await r.json();
         setOrders(data.orders);
@@ -77,7 +78,7 @@ export default function Orders() {
 
   async function loadOrderDetail(id) {
     try {
-      const r = await fetch(`/api/orders/${id}`);
+      const r = await apiFetch(`/api/orders/${id}`);
       if (r.ok) setSelected(await r.json());
     } catch {}
   }
@@ -87,7 +88,7 @@ export default function Orders() {
     setStatusLoading(true);
     setNotification('');
     try {
-      const r = await fetch(`/api/orders/${selected.id}/status`, {
+      const r = await apiFetch(`/api/orders/${selected.id}/status`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ status: newStatus, tracking_number: trackingNo || undefined, estimated_delivery: estimatedDelivery || undefined }),
@@ -378,3 +379,4 @@ export default function Orders() {
     </div>
   );
 }
+

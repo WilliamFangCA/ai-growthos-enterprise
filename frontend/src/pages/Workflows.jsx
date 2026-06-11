@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from 'react';
+﻿import React, { useState, useEffect } from 'react';
+import { apiFetch } from '../utils/apiClient.js';
 
 const CATEGORY_CONFIG = {
   acquisition: { label: '獲客',  color: '#3b82f6', bg: 'rgba(59,130,246,0.12)',  border: 'rgba(59,130,246,0.3)',  icon: '🎯' },
@@ -124,7 +125,7 @@ function CreateModal({ onClose, onCreate }) {
     if (!prompt.trim()) return;
     setAiLoading(true);
     try {
-      const res = await fetch('/api/agents/invoke', {
+      const res = await apiFetch('/api/agents/invoke', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -147,7 +148,7 @@ function CreateModal({ onClose, onCreate }) {
     if (!name.trim()) return;
     setSaving(true);
     try {
-      const res = await fetch('/api/workflows', {
+      const res = await apiFetch('/api/workflows', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name, category, description, trigger_type: trigger, actions: aiActions }),
@@ -385,8 +386,8 @@ export default function Workflows() {
 
   useEffect(() => {
     Promise.all([
-      fetch('/api/workflows').then(r => r.json()),
-      fetch('/api/workflows/stats').then(r => r.json()),
+      apiFetch('/api/workflows').then(r => r.json()),
+      apiFetch('/api/workflows/stats').then(r => r.json()),
     ]).then(([wf, st]) => {
       setWorkflows(Array.isArray(wf) ? wf : []);
       setStats(st);
@@ -398,7 +399,7 @@ export default function Workflows() {
     if (workflow.status === 'paused') { setToast({ message: 'Cannot run a paused workflow', type: 'error' }); return; }
     setRunning(workflow.id);
     try {
-      const res = await fetch(`/api/workflows/${workflow.id}/run`, { method: 'POST', headers: { 'Content-Type': 'application/json' } });
+      const res = await apiFetch(`/api/workflows/${workflow.id}/run`, { method: 'POST', headers: { 'Content-Type': 'application/json' } });
       const data = await res.json();
       if (data.error) throw new Error(data.error);
       setWorkflows(prev => prev.map(w => w.id === workflow.id ? { ...w, run_count: data.runCount } : w));
@@ -557,3 +558,4 @@ export default function Workflows() {
     </div>
   );
 }
+

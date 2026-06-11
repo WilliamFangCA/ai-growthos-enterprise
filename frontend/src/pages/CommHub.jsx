@@ -1,4 +1,6 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+﻿import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { apiFetch } from '../utils/apiClient.js';
+import PlatformIcon from '../components/PlatformIcon.jsx';
 
 const PLATFORM_META = {
   line:      { label: 'LINE',      color: 'bg-green-500',  text: 'text-green-600',  icon: '💬' },
@@ -70,14 +72,14 @@ export default function CommHub() {
 
   async function loadStats() {
     try {
-      const r = await fetch('/api/comms/stats');
+      const r = await apiFetch('/api/comms/stats');
       if (r.ok) setStats(await r.json());
     } catch {}
   }
 
   async function loadAccounts() {
     try {
-      const r = await fetch('/api/comms/accounts');
+      const r = await apiFetch('/api/comms/accounts');
       if (r.ok) setAccounts(await r.json());
     } catch {}
   }
@@ -87,14 +89,14 @@ export default function CommHub() {
       let url = '/api/comms/conversations?';
       if (filterStatus) url += `status=${filterStatus}&`;
       if (filterPlatform) url += `platform=${filterPlatform}&`;
-      const r = await fetch(url);
+      const r = await apiFetch(url);
       if (r.ok) setConvos(await r.json());
     } catch {}
   }
 
   async function loadMessages(id) {
     try {
-      const r = await fetch(`/api/comms/conversations/${id}/messages`);
+      const r = await apiFetch(`/api/comms/conversations/${id}/messages`);
       if (r.ok) {
         setMessages(await r.json());
         setConvos(prev => prev.map(c => c.id === id ? { ...c, unread_count: 0 } : c));
@@ -106,7 +108,7 @@ export default function CommHub() {
     if (!reply.trim() || !selected) return;
     setSendLoading(true);
     try {
-      await fetch('/api/comms/messages/send', {
+      await apiFetch('/api/comms/messages/send', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ conversation_id: selected.id, content: reply, sent_by: 'human' }),
@@ -123,7 +125,7 @@ export default function CommHub() {
     if (!selected) return;
     setAiLoading(true);
     try {
-      const r = await fetch('/api/comms/messages/ai-reply', {
+      const r = await apiFetch('/api/comms/messages/ai-reply', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ conversation_id: selected.id }),
@@ -138,7 +140,7 @@ export default function CommHub() {
   }
 
   async function assignConvo(id, assigned_to) {
-    await fetch(`/api/comms/conversations/${id}/assign`, {
+    await apiFetch(`/api/comms/conversations/${id}/assign`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ assigned_to }),
@@ -148,7 +150,7 @@ export default function CommHub() {
   }
 
   async function resolveConvo(id) {
-    await fetch(`/api/comms/conversations/${id}/assign`, {
+    await apiFetch(`/api/comms/conversations/${id}/assign`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ status: 'resolved' }),
@@ -159,7 +161,7 @@ export default function CommHub() {
 
   async function addAccount() {
     if (!newAccount.account_name) return;
-    await fetch('/api/comms/accounts', {
+    await apiFetch('/api/comms/accounts', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(newAccount),
@@ -174,7 +176,7 @@ export default function CommHub() {
     setSimLoading(true);
     setSimResult(null);
     try {
-      const r = await fetch('/api/comms/webhook/simulate', {
+      const r = await apiFetch('/api/comms/webhook/simulate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(simForm),
@@ -308,7 +310,7 @@ export default function CommHub() {
                     <div>
                       <div className="font-semibold text-gray-800">{selected.contact_name}</div>
                       <div className="flex items-center gap-2">
-                        <span className={`text-xs px-2 py-0.5 rounded-full text-white ${pm(selected.platform).color}`}>{pm(selected.platform).icon} {pm(selected.platform).label}</span>
+                        <span className={`text-xs px-2 py-0.5 rounded-full text-white inline-flex items-center gap-1 ${pm(selected.platform).color}`}><PlatformIcon id={selected.platform} size={12} color="white" /> {pm(selected.platform).label}</span>
                         <span className={`text-xs px-2 py-0.5 rounded-full ${STATUS_BADGE[selected.status] || ''}`}>{selected.status}</span>
                         {selected.tags && selected.tags.split(',').filter(Boolean).map(tag => (
                           <span key={tag} className="text-xs px-2 py-0.5 bg-gray-100 text-gray-600 rounded-full">{tag}</span>
@@ -497,8 +499,8 @@ export default function CommHub() {
             {accounts.map(acc => (
               <div key={acc.id} className="border border-gray-200 rounded-xl p-4">
                 <div className="flex items-center gap-3 mb-3">
-                  <div className={`w-10 h-10 rounded-full ${pm(acc.platform).color} flex items-center justify-center text-white text-lg`}>
-                    {pm(acc.platform).icon}
+                  <div className={`w-10 h-10 rounded-full ${pm(acc.platform).color} flex items-center justify-center text-white`}>
+                    <PlatformIcon id={acc.platform} size={20} color="white" />
                   </div>
                   <div>
                     <div className="font-medium text-gray-800">{acc.account_name}</div>
@@ -557,3 +559,4 @@ export default function CommHub() {
     </div>
   );
 }
+

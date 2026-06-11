@@ -1,4 +1,5 @@
-import React, { useState, useEffect, useCallback } from 'react';
+﻿import React, { useState, useEffect, useCallback } from 'react';
+import { apiFetch } from '../utils/apiClient.js';
 
 const TYPE_META = {
   email_sequence:   { label: 'Email 序列',    icon: '📧', color: '#3b82f6', bg: 'rgba(59,130,246,0.12)' },
@@ -70,10 +71,10 @@ export default function Marketing() {
   const fetchData = useCallback(() => {
     setLoading(true);
     Promise.all([
-      fetch('/api/marketing/stats').then(r => r.json()),
-      fetch(`/api/marketing/campaigns${statusFilter ? `?status=${statusFilter}` : ''}`).then(r => r.json()),
-      fetch('/api/marketing/templates').then(r => r.json()),
-      fetch('/api/marketing/loyalty').then(r => r.json()),
+      apiFetch('/api/marketing/stats').then(r => r.json()),
+      apiFetch(`/api/marketing/campaigns${statusFilter ? `?status=${statusFilter}` : ''}`).then(r => r.json()),
+      apiFetch('/api/marketing/templates').then(r => r.json()),
+      apiFetch('/api/marketing/loyalty').then(r => r.json()),
     ]).then(([s, c, t, l]) => {
       setStats(s); setCampaigns(Array.isArray(c) ? c : []);
       setTemplates(Array.isArray(t) ? t : []); setLoyalty(l);
@@ -84,7 +85,7 @@ export default function Marketing() {
   useEffect(() => { fetchData(); }, [fetchData]);
 
   const handleStatusChange = async (id, status) => {
-    await fetch(`/api/marketing/campaigns/${id}/status`, {
+    await apiFetch(`/api/marketing/campaigns/${id}/status`, {
       method: 'PUT', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ status }),
     });
@@ -96,7 +97,7 @@ export default function Marketing() {
 
   const handleCreate = async () => {
     if (!newCampaign.name.trim()) return;
-    await fetch('/api/marketing/campaigns', {
+    await apiFetch('/api/marketing/campaigns', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(newCampaign),
     });
@@ -106,7 +107,7 @@ export default function Marketing() {
   };
 
   const fetchCampaignDetail = async (id) => {
-    const data = await fetch(`/api/marketing/campaigns/${id}`).then(r => r.json());
+    const data = await apiFetch(`/api/marketing/campaigns/${id}`).then(r => r.json());
     setSelectedCampaign(data);
   };
 
@@ -583,3 +584,4 @@ export default function Marketing() {
     </div>
   );
 }
+
