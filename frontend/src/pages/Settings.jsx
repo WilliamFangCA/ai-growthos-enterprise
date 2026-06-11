@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useUISettings } from '../contexts/UISettingsContext.jsx';
+import PlatformIcon, { ICON_IDS } from '../components/PlatformIcon.jsx';
 
 const STORAGE_KEY = 'growthos_integrations';
 
@@ -25,16 +26,7 @@ const SECTIONS = [
   {
     id: 'ecommerce', icon: '🛍️',
     label: { en: 'E-Commerce', 'zh-TW': '電商平台', 'zh-CN': '电商平台' },
-    fields: [
-      { key: 'shopee_id',     label: 'Shopee Partner ID',       type: 'text',     placeholder: '' },
-      { key: 'shopee_key',    label: 'Shopee Partner Key',      type: 'password', placeholder: '' },
-      { key: 'lazada_key',    label: 'Lazada App Key',          type: 'text',     placeholder: '' },
-      { key: 'lazada_secret', label: 'Lazada App Secret',       type: 'password', placeholder: '' },
-      { key: 'shopify_url',   label: 'Shopify Store URL',       type: 'text',     placeholder: 'mystore.myshopify.com' },
-      { key: 'shopify_token', label: 'Shopify Admin Token',     type: 'password', placeholder: 'shpat_...' },
-      { key: 'amazon_key',    label: 'Amazon SP-API Key',       type: 'password', placeholder: '' },
-      { key: 'amazon_secret', label: 'Amazon SP-API Secret',    type: 'password', placeholder: '' },
-    ],
+    fields: [],
   },
   {
     id: 'logistics', icon: '📦',
@@ -201,12 +193,144 @@ const MESSAGING_PLATFORMS = [
   },
 ];
 
+// ─── Ecommerce Platform Config ───────────────────────────────────────────────
+
+const ECOMMERCE_PLATFORMS = [
+  {
+    id: 'shopee', name: 'Shopee', icon: '🛒', color: '#EE4D2D',
+    auth_types: [
+      {
+        type: 'api_keys', label: 'Partner ID + Key',
+        fields: [
+          { key: 'partner_id',  label: 'Partner ID',  type: 'text' },
+          { key: 'partner_key', label: 'Partner Key', type: 'password' },
+        ],
+      },
+      {
+        type: 'credentials', label: '帳號密碼登入',
+        fields: [
+          { key: 'username', label: '帳號 / Email', type: 'text' },
+          { key: 'password', label: '密碼',         type: 'password' },
+        ],
+      },
+    ],
+  },
+  {
+    id: 'lazada', name: 'Lazada', icon: '🟣', color: '#0F146D',
+    auth_types: [
+      {
+        type: 'api_keys', label: 'App Key + Secret',
+        fields: [
+          { key: 'app_key',    label: 'App Key',    type: 'text' },
+          { key: 'app_secret', label: 'App Secret', type: 'password' },
+        ],
+      },
+      {
+        type: 'credentials', label: '帳號密碼登入',
+        fields: [
+          { key: 'username', label: '帳號 / Email', type: 'text' },
+          { key: 'password', label: '密碼',         type: 'password' },
+        ],
+      },
+    ],
+  },
+  {
+    id: 'shopify', name: 'Shopify', icon: '🏪', color: '#96BF48',
+    auth_types: [
+      {
+        type: 'api_keys', label: 'Store URL + Admin Token',
+        fields: [
+          { key: 'store_url',   label: 'Store URL',   type: 'text',     placeholder: 'mystore.myshopify.com' },
+          { key: 'admin_token', label: 'Admin Token', type: 'password', placeholder: 'shpat_...' },
+        ],
+      },
+      {
+        type: 'credentials', label: '帳號密碼登入',
+        fields: [
+          { key: 'username', label: '帳號 / Email', type: 'text' },
+          { key: 'password', label: '密碼',         type: 'password' },
+        ],
+      },
+    ],
+  },
+  {
+    id: 'amazon', name: 'Amazon', icon: '📦', color: '#FF9900',
+    auth_types: [
+      {
+        type: 'api_keys', label: 'SP-API Key + Secret',
+        fields: [
+          { key: 'sp_key',    label: 'SP-API Key',    type: 'password' },
+          { key: 'sp_secret', label: 'SP-API Secret', type: 'password' },
+        ],
+      },
+      {
+        type: 'credentials', label: '帳號密碼登入',
+        fields: [
+          { key: 'username', label: '帳號 / Email', type: 'text' },
+          { key: 'password', label: '密碼',         type: 'password' },
+        ],
+      },
+    ],
+  },
+  {
+    id: 'tiktok_shop', name: 'TikTok Shop', icon: '🎵', color: '#010101',
+    auth_types: [
+      {
+        type: 'api_keys', label: 'App Key + Secret',
+        fields: [
+          { key: 'app_key',    label: 'App Key',    type: 'text' },
+          { key: 'app_secret', label: 'App Secret', type: 'password' },
+        ],
+      },
+      {
+        type: 'credentials', label: '帳號密碼登入',
+        fields: [
+          { key: 'username', label: '帳號 / Email', type: 'text' },
+          { key: 'password', label: '密碼',         type: 'password' },
+        ],
+      },
+    ],
+  },
+  {
+    id: 'momo', name: 'Momo 購物', icon: '🔴', color: '#D61F3F',
+    auth_types: [
+      {
+        type: 'credentials', label: '帳號密碼登入',
+        fields: [
+          { key: 'username', label: '帳號 / Email', type: 'text' },
+          { key: 'password', label: '密碼',         type: 'password' },
+        ],
+      },
+    ],
+  },
+  {
+    id: 'pchome', name: 'PChome', icon: '🖥️', color: '#CC0000',
+    auth_types: [
+      {
+        type: 'api_keys', label: 'App Key + Secret',
+        fields: [
+          { key: 'app_key',    label: 'App Key',    type: 'text' },
+          { key: 'app_secret', label: 'App Secret', type: 'password' },
+        ],
+      },
+      {
+        type: 'credentials', label: '帳號密碼登入',
+        fields: [
+          { key: 'username', label: '帳號 / Email', type: 'text' },
+          { key: 'password', label: '密碼',         type: 'password' },
+        ],
+      },
+    ],
+  },
+];
+
 // ─── AccountCard ──────────────────────────────────────────────────────────────
 
-function AccountCard({ account, colors, onChange, onDelete }) {
+function AccountCard({ account, colors, onChange, onDelete, platforms = MESSAGING_PLATFORMS }) {
   const [visible, setVisible] = useState(new Set());
+  const [platformOpen, setPlatformOpen] = useState(false);
 
-  const platform = MESSAGING_PLATFORMS.find(p => p.id === account.platform);
+  const platform = platforms.find(p => p.id === account.platform);
   const authDef = platform
     ? (platform.auth_types.find(a => a.type === account.auth_type) || platform.auth_types[0])
     : null;
@@ -216,7 +340,7 @@ function AccountCard({ account, colors, onChange, onDelete }) {
   }
 
   function handlePlatformSelect(platformId) {
-    const newPlatform = MESSAGING_PLATFORMS.find(p => p.id === platformId);
+    const newPlatform = platforms.find(p => p.id === platformId);
     onChange({
       ...account,
       platform: platformId,
@@ -255,26 +379,69 @@ function AccountCard({ account, colors, onChange, onDelete }) {
             border: `1px solid ${platform.color}40`,
             borderRadius: 8, padding: '5px 10px',
           }}>
-            <span style={{ fontSize: 15, lineHeight: 1 }}>{platform.icon}</span>
+            {ICON_IDS.has(platform.id)
+              ? <PlatformIcon id={platform.id} size={18} color={platform.color} />
+              : <span style={{ fontSize: 15, lineHeight: 1 }}>{platform.icon}</span>
+            }
             <span style={{ fontSize: 12, fontWeight: 700, color: platform.color }}>{platform.name}</span>
           </div>
         ) : (
-          <select
-            value=""
-            onChange={e => handlePlatformSelect(e.target.value)}
-            style={{
-              padding: '6px 10px', borderRadius: 8, flexShrink: 0,
-              background: colors.inputBg,
-              border: `1px solid ${colors.inputBorder}`,
-              color: colors.textDim,
-              fontSize: 12, cursor: 'pointer', outline: 'none',
-            }}
-          >
-            <option value="" disabled>選擇平台...</option>
-            {MESSAGING_PLATFORMS.map(p => (
-              <option key={p.id} value={p.id}>{p.icon} {p.name}</option>
-            ))}
-          </select>
+          <div style={{ position: 'relative', flexShrink: 0 }}>
+            <button
+              onClick={() => setPlatformOpen(o => !o)}
+              style={{
+                display: 'flex', alignItems: 'center', gap: 6,
+                padding: '6px 10px', borderRadius: 8,
+                background: colors.inputBg,
+                border: `1px solid ${colors.inputBorder}`,
+                color: colors.textDim,
+                fontSize: 12, cursor: 'pointer', outline: 'none',
+              }}
+            >
+              選擇平台...
+              <svg width="10" height="10" viewBox="0 0 10 10" fill="none" style={{ opacity: 0.5 }}>
+                <path d="M2 3.5L5 6.5L8 3.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+              </svg>
+            </button>
+            {platformOpen && (
+              <div style={{
+                position: 'absolute', top: '100%', left: 0, zIndex: 100,
+                background: colors.card,
+                border: `1px solid ${colors.border}`,
+                borderRadius: 10, marginTop: 4,
+                minWidth: 160, overflow: 'hidden',
+                boxShadow: '0 8px 24px rgba(0,0,0,0.3)',
+              }}>
+                {platforms.map(p => (
+                  <div
+                    key={p.id}
+                    onClick={() => { handlePlatformSelect(p.id); setPlatformOpen(false); }}
+                    style={{
+                      display: 'flex', alignItems: 'center', gap: 10,
+                      padding: '9px 14px', cursor: 'pointer',
+                      fontSize: 13, color: colors.text,
+                      transition: 'background 0.12s',
+                    }}
+                    onMouseEnter={e => e.currentTarget.style.background = colors.inputBg}
+                    onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                  >
+                    <span style={{
+                      display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                      width: 24, height: 24, borderRadius: 6,
+                      background: p.color + '20',
+                      flexShrink: 0,
+                    }}>
+                      {ICON_IDS.has(p.id)
+                        ? <PlatformIcon id={p.id} size={15} color={p.color} />
+                        : <span style={{ fontSize: 13, lineHeight: 1 }}>{p.icon}</span>
+                      }
+                    </span>
+                    <span style={{ fontWeight: 500 }}>{p.name}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
         )}
 
         {/* Vertical divider */}
@@ -596,6 +763,140 @@ function MessagingSection({ colors }) {
   );
 }
 
+// ─── EcommerceSection ─────────────────────────────────────────────────────────
+
+function EcommerceSection({ colors }) {
+  const [accounts, setAccounts] = useState(() => {
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY);
+      const data = JSON.parse(raw || '{}');
+
+      // One-time migration: convert old flat ecommerce keys to card array format
+      if (!Array.isArray(data.ecommerce_accounts) && data.ecommerce && typeof data.ecommerce === 'object') {
+        const legacy = data.ecommerce;
+        const migrated = [];
+        if (legacy.shopee_id || legacy.shopee_key) {
+          migrated.push({ id: 'shopee_migrated', platform: 'shopee', account_name: 'Shopee (已遷移)', auth_type: 'api_keys', partner_id: legacy.shopee_id || '', partner_key: legacy.shopee_key || '', enabled: true, created_at: new Date().toISOString() });
+        }
+        if (legacy.lazada_key || legacy.lazada_secret) {
+          migrated.push({ id: 'lazada_migrated', platform: 'lazada', account_name: 'Lazada (已遷移)', auth_type: 'api_keys', app_key: legacy.lazada_key || '', app_secret: legacy.lazada_secret || '', enabled: true, created_at: new Date().toISOString() });
+        }
+        if (legacy.shopify_url || legacy.shopify_token) {
+          migrated.push({ id: 'shopify_migrated', platform: 'shopify', account_name: 'Shopify (已遷移)', auth_type: 'api_keys', store_url: legacy.shopify_url || '', admin_token: legacy.shopify_token || '', enabled: true, created_at: new Date().toISOString() });
+        }
+        if (legacy.amazon_key || legacy.amazon_secret) {
+          migrated.push({ id: 'amazon_migrated', platform: 'amazon', account_name: 'Amazon (已遷移)', auth_type: 'api_keys', sp_key: legacy.amazon_key || '', sp_secret: legacy.amazon_secret || '', enabled: true, created_at: new Date().toISOString() });
+        }
+        if (migrated.length > 0) {
+          data.ecommerce_accounts = migrated;
+          delete data.ecommerce;
+          localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+          return migrated;
+        }
+      }
+
+      return Array.isArray(data.ecommerce_accounts) ? data.ecommerce_accounts : [];
+    } catch {
+      return [];
+    }
+  });
+
+  function saveToStorage(newAccounts) {
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY);
+      const data = JSON.parse(raw || '{}');
+      data.ecommerce_accounts = newAccounts;
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+    } catch {}
+  }
+
+  function handleChange(updatedAccount) {
+    setAccounts(prev => {
+      const next = prev.map(a => a.id === updatedAccount.id ? updatedAccount : a);
+      saveToStorage(next);
+      return next;
+    });
+  }
+
+  function handleDelete(accountId) {
+    if (!window.confirm('確定要刪除此電商帳號嗎？')) return;
+    setAccounts(prev => {
+      const next = prev.filter(a => a.id !== accountId);
+      saveToStorage(next);
+      return next;
+    });
+  }
+
+  function addNewCard() {
+    const blank = {
+      id: `ec_${Date.now()}`,
+      platform: '',
+      account_name: '',
+      auth_type: '',
+      enabled: true,
+      created_at: new Date().toISOString(),
+    };
+    setAccounts(prev => {
+      const next = [...prev, blank];
+      saveToStorage(next);
+      return next;
+    });
+  }
+
+  return (
+    <div>
+      {accounts.map(account => (
+        <AccountCard
+          key={account.id}
+          account={account}
+          colors={colors}
+          onChange={handleChange}
+          onDelete={handleDelete}
+          platforms={ECOMMERCE_PLATFORMS}
+        />
+      ))}
+
+      {accounts.length === 0 && (
+        <div style={{
+          textAlign: 'center', padding: '36px 20px',
+          color: colors.textDim, fontSize: 13,
+          background: colors.card,
+          border: `1px dashed ${colors.border}`,
+          borderRadius: 12, marginBottom: 12,
+        }}>
+          尚未新增任何電商帳號，點擊下方按鈕開始新增
+        </div>
+      )}
+
+      <button
+        onClick={addNewCard}
+        style={{
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          gap: 8, width: '100%', padding: '11px 16px',
+          borderRadius: 10,
+          border: `1.5px dashed ${colors.border}`,
+          background: 'transparent', cursor: 'pointer',
+          color: colors.textMuted, fontSize: 14, fontWeight: 500,
+          transition: 'all 0.2s',
+        }}
+        onMouseEnter={e => {
+          e.currentTarget.style.borderColor = '#3b82f6';
+          e.currentTarget.style.color = '#3b82f6';
+          e.currentTarget.style.background = 'rgba(59,130,246,0.05)';
+        }}
+        onMouseLeave={e => {
+          e.currentTarget.style.borderColor = colors.border;
+          e.currentTarget.style.color = colors.textMuted;
+          e.currentTarget.style.background = 'transparent';
+        }}
+      >
+        <span style={{ fontSize: 18, lineHeight: 1 }}>＋</span>
+        <span>新增電商帳號</span>
+      </button>
+    </div>
+  );
+}
+
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function loadData() {
@@ -709,6 +1010,8 @@ export default function Settings() {
             <InterfaceSection colors={colors} theme={theme} toggleTheme={toggleTheme} language={language} setLanguage={setLanguage} t={t} />
           ) : activeSection === 'messaging' ? (
             <MessagingSection colors={colors} />
+          ) : activeSection === 'ecommerce' ? (
+            <EcommerceSection colors={colors} />
           ) : (
             <>
               <div style={{
