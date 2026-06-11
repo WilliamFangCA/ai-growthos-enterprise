@@ -31,30 +31,12 @@ const SECTIONS = [
   {
     id: 'logistics', icon: '📦',
     label: { en: 'Logistics', 'zh-TW': '物流', 'zh-CN': '物流' },
-    fields: [
-      { key: 'fedex_key',    label: 'FedEx API Key',         type: 'password', placeholder: '' },
-      { key: 'fedex_secret', label: 'FedEx API Secret',      type: 'password', placeholder: '' },
-      { key: 'dhl_key',      label: 'DHL API Key',           type: 'password', placeholder: '' },
-      { key: 'sf_appkey',    label: '順豐速運 App Key',        type: 'text',     placeholder: '' },
-      { key: 'sf_secret',    label: '順豐速運 Secret',         type: 'password', placeholder: '' },
-      { key: 'blackcat_key', label: '黑貓宅急便 API Key',      type: 'password', placeholder: '' },
-      { key: 'post_key',     label: '中華郵政 API Key',        type: 'password', placeholder: '' },
-      { key: 'kerry_key',    label: 'Kerry Express API Key', type: 'password', placeholder: '' },
-    ],
+    fields: [],
   },
   {
     id: 'ads', icon: '📢',
     label: { en: 'Ad Platforms', 'zh-TW': '廣告投放', 'zh-CN': '广告投放' },
-    fields: [
-      { key: 'fb_app_id',      label: 'Facebook App ID',             type: 'text',     placeholder: '' },
-      { key: 'fb_token',       label: 'Facebook Access Token',       type: 'password', placeholder: '' },
-      { key: 'google_dev_tok', label: 'Google Ads Developer Token',  type: 'password', placeholder: '' },
-      { key: 'google_cli_id',  label: 'Google OAuth Client ID',      type: 'text',     placeholder: '' },
-      { key: 'google_cli_sec', label: 'Google OAuth Client Secret',  type: 'password', placeholder: '' },
-      { key: 'tiktok_token',   label: 'TikTok Access Token',         type: 'password', placeholder: '' },
-      { key: 'line_ads_token', label: 'LINE Ads API Token',          type: 'password', placeholder: '' },
-      { key: 'twitter_key',    label: 'X (Twitter) API Key',         type: 'password', placeholder: '' },
-    ],
+    fields: [],
   },
   {
     id: 'interface', icon: '🎨',
@@ -311,6 +293,258 @@ const ECOMMERCE_PLATFORMS = [
         fields: [
           { key: 'app_key',    label: 'App Key',    type: 'text' },
           { key: 'app_secret', label: 'App Secret', type: 'password' },
+        ],
+      },
+      {
+        type: 'credentials', label: '帳號密碼登入',
+        fields: [
+          { key: 'username', label: '帳號 / Email', type: 'text' },
+          { key: 'password', label: '密碼',         type: 'password' },
+        ],
+      },
+    ],
+  },
+];
+
+// ─── Logistics Platform Config ────────────────────────────────────────────────
+
+const LOGISTICS_PLATFORMS = [
+  {
+    id: 'fedex', name: 'FedEx', icon: '🟣', color: '#4D148C',
+    auth_types: [
+      {
+        type: 'api_keys', label: 'API Key + Secret',
+        fields: [
+          { key: 'api_key',    label: 'API Key',    type: 'password' },
+          { key: 'api_secret', label: 'API Secret', type: 'password' },
+        ],
+      },
+      {
+        type: 'credentials', label: '帳號密碼登入',
+        fields: [
+          { key: 'username', label: '帳號 / Email', type: 'text' },
+          { key: 'password', label: '密碼',         type: 'password' },
+        ],
+      },
+    ],
+  },
+  {
+    id: 'dhl', name: 'DHL', icon: '🟡', color: '#FFCC00',
+    auth_types: [
+      {
+        type: 'api_keys', label: 'API Key',
+        fields: [
+          { key: 'api_key', label: 'API Key', type: 'password' },
+        ],
+      },
+      {
+        type: 'credentials', label: '帳號密碼登入',
+        fields: [
+          { key: 'username', label: '帳號 / Email', type: 'text' },
+          { key: 'password', label: '密碼',         type: 'password' },
+        ],
+      },
+    ],
+  },
+  {
+    id: 'sf_express', name: '順豐速運', icon: '🔴', color: '#E31E24',
+    auth_types: [
+      {
+        type: 'api_keys', label: 'App Key + Secret',
+        fields: [
+          { key: 'app_key',    label: 'App Key',    type: 'text' },
+          { key: 'app_secret', label: 'App Secret', type: 'password' },
+        ],
+      },
+      {
+        type: 'credentials', label: '帳號密碼登入',
+        fields: [
+          { key: 'username', label: '帳號 / Email', type: 'text' },
+          { key: 'password', label: '密碼',         type: 'password' },
+        ],
+      },
+    ],
+  },
+  {
+    id: 'blackcat', name: '黑貓宅急便', icon: '🐱', color: '#1A1A1A',
+    auth_types: [
+      {
+        type: 'api_keys', label: 'API Key',
+        fields: [
+          { key: 'api_key', label: 'API Key', type: 'password' },
+        ],
+      },
+      {
+        type: 'credentials', label: '帳號密碼登入',
+        fields: [
+          { key: 'username', label: '帳號 / Email', type: 'text' },
+          { key: 'password', label: '密碼',         type: 'password' },
+        ],
+      },
+    ],
+  },
+  {
+    id: 'chunghwa_post', name: '中華郵政', icon: '🟢', color: '#007F3B',
+    auth_types: [
+      {
+        type: 'api_keys', label: 'API Key',
+        fields: [
+          { key: 'api_key', label: 'API Key', type: 'password' },
+        ],
+      },
+      {
+        type: 'credentials', label: '帳號密碼登入',
+        fields: [
+          { key: 'username', label: '帳號 / Email', type: 'text' },
+          { key: 'password', label: '密碼',         type: 'password' },
+        ],
+      },
+    ],
+  },
+  {
+    id: 'kerry', name: 'Kerry Express', icon: '🔵', color: '#003087',
+    auth_types: [
+      {
+        type: 'api_keys', label: 'API Key',
+        fields: [
+          { key: 'api_key', label: 'API Key', type: 'password' },
+        ],
+      },
+      {
+        type: 'credentials', label: '帳號密碼登入',
+        fields: [
+          { key: 'username', label: '帳號 / Email', type: 'text' },
+          { key: 'password', label: '密碼',         type: 'password' },
+        ],
+      },
+    ],
+  },
+  {
+    id: 'ups', name: 'UPS', icon: '🟤', color: '#351C15',
+    auth_types: [
+      {
+        type: 'api_keys', label: 'Client ID + Secret',
+        fields: [
+          { key: 'client_id',     label: 'Client ID',     type: 'text' },
+          { key: 'client_secret', label: 'Client Secret', type: 'password' },
+        ],
+      },
+      {
+        type: 'credentials', label: '帳號密碼登入',
+        fields: [
+          { key: 'username', label: '帳號 / Email', type: 'text' },
+          { key: 'password', label: '密碼',         type: 'password' },
+        ],
+      },
+    ],
+  },
+];
+
+// ─── Ads Platform Config ──────────────────────────────────────────────────────
+
+const ADS_PLATFORMS = [
+  {
+    id: 'facebook_ads', name: 'Facebook Ads', icon: '📘', color: '#1877F2',
+    auth_types: [
+      {
+        type: 'api_keys', label: 'App ID + Access Token',
+        fields: [
+          { key: 'app_id',       label: 'App ID',         type: 'text' },
+          { key: 'access_token', label: 'Access Token',   type: 'password' },
+        ],
+      },
+      {
+        type: 'credentials', label: '帳號密碼登入',
+        fields: [
+          { key: 'username', label: '帳號 / Email', type: 'text' },
+          { key: 'password', label: '密碼',         type: 'password' },
+        ],
+      },
+    ],
+  },
+  {
+    id: 'google_ads', name: 'Google Ads', icon: '🔍', color: '#4285F4',
+    auth_types: [
+      {
+        type: 'api_keys', label: 'Developer Token + OAuth',
+        fields: [
+          { key: 'dev_token',     label: 'Developer Token',    type: 'password' },
+          { key: 'client_id',     label: 'OAuth Client ID',    type: 'text' },
+          { key: 'client_secret', label: 'OAuth Client Secret',type: 'password' },
+        ],
+      },
+      {
+        type: 'credentials', label: '帳號密碼登入',
+        fields: [
+          { key: 'username', label: 'Google 帳號', type: 'text' },
+          { key: 'password', label: '密碼',        type: 'password' },
+        ],
+      },
+    ],
+  },
+  {
+    id: 'tiktok_ads', name: 'TikTok Ads', icon: '🎵', color: '#010101',
+    auth_types: [
+      {
+        type: 'api_keys', label: 'Access Token',
+        fields: [
+          { key: 'access_token', label: 'Access Token', type: 'password' },
+        ],
+      },
+      {
+        type: 'credentials', label: '帳號密碼登入',
+        fields: [
+          { key: 'username', label: '帳號 / Email', type: 'text' },
+          { key: 'password', label: '密碼',         type: 'password' },
+        ],
+      },
+    ],
+  },
+  {
+    id: 'line_ads', name: 'LINE Ads', icon: '💚', color: '#06C755',
+    auth_types: [
+      {
+        type: 'api_keys', label: 'API Token',
+        fields: [
+          { key: 'api_token', label: 'API Token', type: 'password' },
+        ],
+      },
+      {
+        type: 'credentials', label: '帳號密碼登入',
+        fields: [
+          { key: 'username', label: 'LINE 帳號', type: 'text' },
+          { key: 'password', label: '密碼',      type: 'password' },
+        ],
+      },
+    ],
+  },
+  {
+    id: 'twitter_ads', name: 'X (Twitter) Ads', icon: '🐦', color: '#000000',
+    auth_types: [
+      {
+        type: 'api_keys', label: 'API Key + Secret',
+        fields: [
+          { key: 'api_key',    label: 'API Key',    type: 'password' },
+          { key: 'api_secret', label: 'API Secret', type: 'password' },
+        ],
+      },
+      {
+        type: 'credentials', label: '帳號密碼登入',
+        fields: [
+          { key: 'username', label: '帳號 / Email', type: 'text' },
+          { key: 'password', label: '密碼',         type: 'password' },
+        ],
+      },
+    ],
+  },
+  {
+    id: 'yahoo_ads', name: 'Yahoo! Ads', icon: '🟣', color: '#6001D2',
+    auth_types: [
+      {
+        type: 'api_keys', label: 'Client ID + Secret',
+        fields: [
+          { key: 'client_id',     label: 'Client ID',     type: 'text' },
+          { key: 'client_secret', label: 'Client Secret', type: 'password' },
         ],
       },
       {
@@ -897,6 +1131,107 @@ function EcommerceSection({ colors }) {
   );
 }
 
+// ─── Generic card-based section factory ──────────────────────────────────────
+
+function makePlatformSection(storageKey, platforms, emptyLabel, addLabel, migrateFromLegacy) {
+  return function PlatformSection({ colors }) {
+    const [accounts, setAccounts] = useState(() => {
+      try {
+        const raw = localStorage.getItem(STORAGE_KEY);
+        const data = JSON.parse(raw || '{}');
+        if (!Array.isArray(data[storageKey])) {
+          const migrated = migrateFromLegacy ? migrateFromLegacy(data) : [];
+          if (migrated.length > 0) {
+            data[storageKey] = migrated;
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+            return migrated;
+          }
+        }
+        return Array.isArray(data[storageKey]) ? data[storageKey] : [];
+      } catch { return []; }
+    });
+
+    function save(next) {
+      try {
+        const data = JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}');
+        data[storageKey] = next;
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+      } catch {}
+    }
+
+    function handleChange(updated) {
+      setAccounts(prev => { const next = prev.map(a => a.id === updated.id ? updated : a); save(next); return next; });
+    }
+    function handleDelete(id) {
+      if (!window.confirm('確定要刪除此帳號嗎？')) return;
+      setAccounts(prev => { const next = prev.filter(a => a.id !== id); save(next); return next; });
+    }
+    function addNew() {
+      const blank = { id: `${storageKey}_${Date.now()}`, platform: '', account_name: '', auth_type: '', enabled: true, created_at: new Date().toISOString() };
+      setAccounts(prev => { const next = [...prev, blank]; save(next); return next; });
+    }
+
+    return (
+      <div>
+        {accounts.map(account => (
+          <AccountCard key={account.id} account={account} colors={colors} onChange={handleChange} onDelete={handleDelete} platforms={platforms} />
+        ))}
+        {accounts.length === 0 && (
+          <div style={{ textAlign: 'center', padding: '36px 20px', color: colors.textDim, fontSize: 13, background: colors.card, border: `1px dashed ${colors.border}`, borderRadius: 12, marginBottom: 12 }}>
+            {emptyLabel}
+          </div>
+        )}
+        <button
+          onClick={addNew}
+          style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, width: '100%', padding: '11px 16px', borderRadius: 10, border: `1.5px dashed ${colors.border}`, background: 'transparent', cursor: 'pointer', color: colors.textMuted, fontSize: 14, fontWeight: 500, transition: 'all 0.2s' }}
+          onMouseEnter={e => { e.currentTarget.style.borderColor = '#3b82f6'; e.currentTarget.style.color = '#3b82f6'; e.currentTarget.style.background = 'rgba(59,130,246,0.05)'; }}
+          onMouseLeave={e => { e.currentTarget.style.borderColor = colors.border; e.currentTarget.style.color = colors.textMuted; e.currentTarget.style.background = 'transparent'; }}
+        >
+          <span style={{ fontSize: 18, lineHeight: 1 }}>＋</span>
+          <span>{addLabel}</span>
+        </button>
+      </div>
+    );
+  };
+}
+
+const LogisticsSection = makePlatformSection(
+  'logistics_accounts',
+  LOGISTICS_PLATFORMS,
+  '尚未新增任何物流帳號，點擊下方按鈕開始新增',
+  '新增物流帳號',
+  (data) => {
+    const leg = data.logistics || {};
+    const out = [];
+    if (leg.fedex_key || leg.fedex_secret)    out.push({ id: 'fedex_mig',    platform: 'fedex',        account_name: 'FedEx (已遷移)',    auth_type: 'api_keys', api_key: leg.fedex_key || '',    api_secret: leg.fedex_secret || '', enabled: true, created_at: new Date().toISOString() });
+    if (leg.dhl_key)                          out.push({ id: 'dhl_mig',      platform: 'dhl',          account_name: 'DHL (已遷移)',      auth_type: 'api_keys', api_key: leg.dhl_key || '',                                     enabled: true, created_at: new Date().toISOString() });
+    if (leg.sf_appkey || leg.sf_secret)       out.push({ id: 'sf_mig',       platform: 'sf_express',   account_name: '順豐 (已遷移)',     auth_type: 'api_keys', app_key: leg.sf_appkey || '',    app_secret: leg.sf_secret || '',    enabled: true, created_at: new Date().toISOString() });
+    if (leg.blackcat_key)                     out.push({ id: 'blackcat_mig', platform: 'blackcat',     account_name: '黑貓 (已遷移)',     auth_type: 'api_keys', api_key: leg.blackcat_key || '',                                enabled: true, created_at: new Date().toISOString() });
+    if (leg.post_key)                         out.push({ id: 'post_mig',     platform: 'chunghwa_post',account_name: '中華郵政 (已遷移)', auth_type: 'api_keys', api_key: leg.post_key || '',                                    enabled: true, created_at: new Date().toISOString() });
+    if (leg.kerry_key)                        out.push({ id: 'kerry_mig',    platform: 'kerry',        account_name: 'Kerry (已遷移)',    auth_type: 'api_keys', api_key: leg.kerry_key || '',                                   enabled: true, created_at: new Date().toISOString() });
+    if (out.length) delete data.logistics;
+    return out;
+  }
+);
+
+const AdsSection = makePlatformSection(
+  'ads_accounts',
+  ADS_PLATFORMS,
+  '尚未新增任何廣告帳號，點擊下方按鈕開始新增',
+  '新增廣告帳號',
+  (data) => {
+    const leg = data.ads || {};
+    const out = [];
+    if (leg.fb_app_id || leg.fb_token)        out.push({ id: 'fb_mig',     platform: 'facebook_ads', account_name: 'Facebook (已遷移)', auth_type: 'api_keys', app_id: leg.fb_app_id || '',       access_token: leg.fb_token || '',      enabled: true, created_at: new Date().toISOString() });
+    if (leg.google_dev_tok)                   out.push({ id: 'ga_mig',     platform: 'google_ads',   account_name: 'Google Ads (已遷移)',auth_type: 'api_keys', dev_token: leg.google_dev_tok || '', client_id: leg.google_cli_id || '', client_secret: leg.google_cli_sec || '', enabled: true, created_at: new Date().toISOString() });
+    if (leg.tiktok_token)                     out.push({ id: 'tt_mig',     platform: 'tiktok_ads',   account_name: 'TikTok Ads (已遷移)',auth_type: 'api_keys', access_token: leg.tiktok_token || '',                             enabled: true, created_at: new Date().toISOString() });
+    if (leg.line_ads_token)                   out.push({ id: 'la_mig',     platform: 'line_ads',     account_name: 'LINE Ads (已遷移)', auth_type: 'api_keys', api_token: leg.line_ads_token || '',                              enabled: true, created_at: new Date().toISOString() });
+    if (leg.twitter_key)                      out.push({ id: 'tw_mig',     platform: 'twitter_ads',  account_name: 'X/Twitter (已遷移)',auth_type: 'api_keys', api_key: leg.twitter_key || '',                                   enabled: true, created_at: new Date().toISOString() });
+    if (out.length) delete data.ads;
+    return out;
+  }
+);
+
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function loadData() {
@@ -1012,6 +1347,10 @@ export default function Settings() {
             <MessagingSection colors={colors} />
           ) : activeSection === 'ecommerce' ? (
             <EcommerceSection colors={colors} />
+          ) : activeSection === 'logistics' ? (
+            <LogisticsSection colors={colors} />
+          ) : activeSection === 'ads' ? (
+            <AdsSection colors={colors} />
           ) : (
             <>
               <div style={{
