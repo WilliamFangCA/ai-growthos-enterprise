@@ -840,6 +840,7 @@ const ADS_PLATFORMS = [
 function AccountCard({ account, colors, onChange, onDelete, platforms = MESSAGING_PLATFORMS }) {
   const [visible, setVisible] = useState(new Set());
   const [platformOpen, setPlatformOpen] = useState(false);
+  const [platformSearch, setPlatformSearch] = useState('');
 
   const platform = platforms.find(p => p.id === account.platform);
   const authDef = platform
@@ -920,36 +921,64 @@ function AccountCard({ account, colors, onChange, onDelete, platforms = MESSAGIN
                 background: colors.card,
                 border: `1px solid ${colors.border}`,
                 borderRadius: 10, marginTop: 4,
-                minWidth: 160, overflow: 'hidden',
+                minWidth: 200, width: 220,
                 boxShadow: '0 8px 24px rgba(0,0,0,0.3)',
+                display: 'flex', flexDirection: 'column',
               }}>
-                {platforms.map(p => (
-                  <div
-                    key={p.id}
-                    onClick={() => { handlePlatformSelect(p.id); setPlatformOpen(false); }}
+                {/* Search box */}
+                <div style={{ padding: '8px 10px', borderBottom: `1px solid ${colors.border}` }}>
+                  <input
+                    autoFocus
+                    value={platformSearch}
+                    onChange={e => setPlatformSearch(e.target.value)}
+                    placeholder="搜尋平台..."
+                    onClick={e => e.stopPropagation()}
                     style={{
-                      display: 'flex', alignItems: 'center', gap: 10,
-                      padding: '9px 14px', cursor: 'pointer',
-                      fontSize: 13, color: colors.text,
-                      transition: 'background 0.12s',
+                      width: '100%', padding: '5px 8px', borderRadius: 6,
+                      background: colors.inputBg, border: `1px solid ${colors.inputBorder}`,
+                      color: colors.text, fontSize: 12, outline: 'none',
+                      boxSizing: 'border-box',
                     }}
-                    onMouseEnter={e => e.currentTarget.style.background = colors.inputBg}
-                    onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
-                  >
-                    <span style={{
-                      display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-                      width: 24, height: 24, borderRadius: 6,
-                      background: p.color + '20',
-                      flexShrink: 0,
-                    }}>
-                      {ICON_IDS.has(p.id)
-                        ? <PlatformIcon id={p.id} size={15} color={p.color} />
-                        : <span style={{ fontSize: 13, lineHeight: 1 }}>{p.icon}</span>
-                      }
-                    </span>
-                    <span style={{ fontWeight: 500 }}>{p.name}</span>
-                  </div>
-                ))}
+                  />
+                </div>
+                {/* Scrollable list */}
+                <div style={{ overflowY: 'auto', maxHeight: 280 }}>
+                  {platforms
+                    .filter(p => !platformSearch || p.name.toLowerCase().includes(platformSearch.toLowerCase()) || p.id.includes(platformSearch.toLowerCase()))
+                    .map(p => (
+                      <div
+                        key={p.id}
+                        onClick={() => { handlePlatformSelect(p.id); setPlatformOpen(false); setPlatformSearch(''); }}
+                        style={{
+                          display: 'flex', alignItems: 'center', gap: 10,
+                          padding: '8px 12px', cursor: 'pointer',
+                          fontSize: 13, color: colors.text,
+                          transition: 'background 0.12s',
+                        }}
+                        onMouseEnter={e => e.currentTarget.style.background = colors.inputBg}
+                        onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                      >
+                        <span style={{
+                          display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                          width: 24, height: 24, borderRadius: 6,
+                          background: p.color + '20',
+                          flexShrink: 0,
+                        }}>
+                          {ICON_IDS.has(p.id)
+                            ? <PlatformIcon id={p.id} size={15} color={p.color} />
+                            : <span style={{ fontSize: 13, lineHeight: 1 }}>{p.icon}</span>
+                          }
+                        </span>
+                        <span style={{ fontWeight: 500 }}>{p.name}</span>
+                      </div>
+                    ))
+                  }
+                  {platforms.filter(p => !platformSearch || p.name.toLowerCase().includes(platformSearch.toLowerCase()) || p.id.includes(platformSearch.toLowerCase())).length === 0 && (
+                    <div style={{ padding: '12px 14px', fontSize: 12, color: colors.textDim, textAlign: 'center' }}>
+                      找不到「{platformSearch}」
+                    </div>
+                  )}
+                </div>
               </div>
             )}
           </div>
