@@ -163,11 +163,18 @@ export default function VoiceHub() {
   // ── 播放 AI 語音 ──────────────────────────────────────────────────────────
   function playBase64Mp3(b64) {
     return new Promise(resolve => {
+      if (audioRef.current) {
+        try { audioRef.current.pause(); } catch {}
+      }
       const audio = new Audio('data:audio/mp3;base64,' + b64);
       audioRef.current = audio;
-      audio.onended = resolve;
-      audio.onerror = resolve;
-      audio.play().catch(resolve);
+      let settled = false;
+      const finish = () => { if (!settled) { settled = true; resolve(); } };
+      audio.onended = finish;
+      audio.onerror = finish;
+      const guard = setTimeout(finish, 30000);
+      audio.addEventListener('ended', () => clearTimeout(guard), { once: true });
+      audio.play().catch(finish);
     });
   }
 
@@ -176,8 +183,11 @@ export default function VoiceHub() {
       try {
         const u = new SpeechSynthesisUtterance(text);
         u.lang = REC_LANG[language] || 'zh-TW';
-        u.onend = resolve;
-        u.onerror = resolve;
+        let settled = false;
+        const finish = () => { if (!settled) { settled = true; resolve(); } };
+        u.onend = finish;
+        u.onerror = finish;
+        setTimeout(finish, 20000);
         window.speechSynthesis.speak(u);
       } catch {
         resolve();
@@ -188,6 +198,8 @@ export default function VoiceHub() {
   // ── 語音辨識 ──────────────────────────────────────────────────────────────
   function startListening() {
     if (!activeRef.current) return;
+    try { recognitionRef.current?.abort(); } catch {}
+    recognitionRef.current = null;
     setStatusBoth('listening');
     setInterim('');
 
@@ -260,7 +272,10 @@ export default function VoiceHub() {
       if (activeRef.current) setToast({ message: err.message, type: 'error' });
     }
 
-    if (activeRef.current) startListening();
+    if (activeRef.current) {
+      await new Promise(r => setTimeout(r, 300));
+      startListening();
+    }
   }
 
   // ── 通話控制 ──────────────────────────────────────────────────────────────
