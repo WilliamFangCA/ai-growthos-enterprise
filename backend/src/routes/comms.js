@@ -3,6 +3,7 @@ const router = express.Router();
 const { run, get, all, getDb } = require('../db');
 const db = { transaction: (fn) => getDb().transaction(fn) };
 const { callAI } = require('../aiRouter');
+const { readKnowledgeBase } = require('./hub-settings');
 
 // GET /api/comms/accounts
 router.get('/accounts', (req, res) => {
@@ -83,7 +84,12 @@ router.post('/messages/ai-reply', async (req, res) => {
 
     const history = msgs.map(m => `${m.direction === 'inbound' ? 'Customer' : 'AI'}: ${m.content}`).join('\n');
     const prompt = `Conversation history:\n${history}\n\nPlease write a helpful, professional reply to the customer's latest message. Be concise and friendly. Respond in the same language as the customer.`;
-    const systemPrompt = 'You are a professional customer service AI for AI GrowthOS Enterprise. You help customers with inquiries, orders, and product information. Always be helpful, empathetic, and solution-oriented.';
+    const hubConfig = get('SELECT * FROM hub_configs WHERE hub_type = ?', ['comms']) || {};
+    const knowledgeText = await readKnowledgeBase(hubConfig.knowledge_base_path || '');
+    const systemPrompt = [
+      hubConfig.system_prompt || 'You are a professional customer service AI for AI GrowthOS Enterprise. You help customers with inquiries, orders, and product information. Always be helpful, empathetic, and solution-oriented.',
+      knowledgeText ? `\n\n【產品知識庫 / Product Knowledge】\n${knowledgeText}` : '',
+    ].join('');
 
     const result = await callAI(prompt, systemPrompt, { model: model || 'glm-5-turbo', maxTokens: 500, temperature: temperature || 0.7 });
 
@@ -179,7 +185,12 @@ async function runAIRulesEngine(conversationId, platform, inboundMessage) {
       .replace(/\{name\}/g, contactName)
       .replace(/\{brand\}/g, 'AI GrowthOS');
 
-    const systemPrompt = '你是一個專業 AI 客服，代表品牌回覆客戶。回覆要簡短親切，使用與客戶相同的語言。';
+    const hubCfg = get('SELECT * FROM hub_configs WHERE hub_type = ?', ['comms']) || {};
+    const kbText = await readKnowledgeBase(hubCfg.knowledge_base_path || '');
+    const systemPrompt = [
+      hubCfg.system_prompt || '你是一個專業 AI 客服，代表品牌回覆客戶。回覆要簡短親切，使用與客戶相同的語言。',
+      kbText ? `\n\n【產品知識庫】\n${kbText}` : '',
+    ].join('');
 
     const aiResult = await callAI(
       `客戶訊息：${inboundMessage}\n\n請根據以下回覆範本生成最終回覆：${prompt}`,

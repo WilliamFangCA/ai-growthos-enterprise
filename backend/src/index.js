@@ -58,6 +58,7 @@ const analyticsRouter = require('./routes/analytics');
 const membersRouter = require('./routes/members');
 const toolsRouter = require('./routes/tools');
 const voiceRouter = require('./routes/voice');
+const hubSettingsRouter = require('./routes/hub-settings');
 
 // Dashboard and analytics are read-only stats — optionalAuth so the sidebar can poll without a token
 app.use('/api/dashboard', optionalAuth, dashboardRouter);
@@ -74,6 +75,7 @@ app.use('/api/marketing', requireAuth, marketingRouter);
 app.use('/api/members', requireAuth, membersRouter);
 app.use('/api/tools', requireAuth, toolsRouter);
 app.use('/api/voice', optionalAuth, voiceRouter);
+app.use('/api/hub-settings', requireAuth, hubSettingsRouter);
 
 // 生成的媒體檔（圖片/影片/音樂）— 由 routes/content.js 寫入 backend/data/media
 const mediaDir = path.join(__dirname, '..', 'data', 'media');

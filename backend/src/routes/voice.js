@@ -9,6 +9,7 @@ const router = express.Router();
 const { callAI } = require('../aiRouter');
 const { synthesizeSpeech, synthesizeXTTS, VOICES, DEFAULT_VOICE } = require('../services/ttsRouter');
 const { run, get, all } = require('../db');
+const { readKnowledgeBase } = require('./hub-settings');
 
 const VOICES_DIR = path.join(__dirname, '..', '..', 'data', 'voices');
 if (!fs.existsSync(VOICES_DIR)) fs.mkdirSync(VOICES_DIR, { recursive: true });
@@ -110,12 +111,18 @@ router.post('/call/:id/turn', async (req, res) => {
       .map(m => `${m.direction === 'inbound' ? '客戶' : 'AI'}：${m.content}`)
       .join('\n');
 
-    const systemPrompt =
-      '你是 AI GrowthOS 的語音客服，正在跟客戶進行即時語音通話。回覆規則：' +
-      '1) 像真人講電話一樣自然口語，簡短扼要（最多 80 字）；' +
+    const hubConfig = get('SELECT * FROM hub_configs WHERE hub_type = ?', ['voice']) || {};
+    const knowledgeText = await readKnowledgeBase(hubConfig.knowledge_base_path || '');
+    const baseRules =
+      '回覆規則：1) 像真人講電話一樣自然口語，簡短扼要（最多 80 字）；' +
       '2) 絕對不要使用 markdown、條列符號、emoji 或特殊符號（回覆會被轉成語音唸出來）；' +
       '3) 有同理心、主動解決問題，不確定時禮貌詢問細節。' +
       (LANGUAGE_INSTRUCTIONS[language] || LANGUAGE_INSTRUCTIONS['zh-TW']);
+    const systemPrompt = [
+      hubConfig.system_prompt || '你是 AI GrowthOS 的語音客服，正在跟客戶進行即時語音通話。',
+      knowledgeText ? `\n\n【產品知識庫】\n${knowledgeText}` : '',
+      `\n\n${baseRules}`,
+    ].join('');
 
     const result = await callAI(
       `通話逐字稿：\n${historyText}\n\n請以語音客服身分回覆客戶最後一句話。`,

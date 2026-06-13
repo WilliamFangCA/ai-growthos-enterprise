@@ -1,4 +1,5 @@
 ﻿import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { useLocation } from 'react-router-dom';
 import { apiFetch } from '../utils/apiClient.js';
 import PlatformIcon from '../components/PlatformIcon.jsx';
 import CommHubOnboarding from './CommHubOnboarding.jsx';
@@ -41,6 +42,7 @@ function fmtTime(dt) {
 }
 
 export default function CommHub() {
+  const location = useLocation();
   const [convos, setConvos] = useState([]);
   const [selected, setSelected] = useState(null);
   const [messages, setMessages] = useState([]);
@@ -59,9 +61,17 @@ export default function CommHub() {
   const [simResult, setSimResult] = useState(null);
   const [refreshing, setRefreshing] = useState(false);
   const [showOnboarding, setShowOnboarding] = useState(false);
+  const [hubPrompt, setHubPrompt] = useState('');
+  const [hubKbName, setHubKbName] = useState('');
+  const [hubKbFile, setHubKbFile] = useState(null);
+  const [hubSaving, setHubSaving] = useState(false);
+  const [hubKbUploading, setHubKbUploading] = useState(false);
+  const [hubSettingsMsg, setHubSettingsMsg] = useState(null);
+  const hubKbFileRef = useRef(null);
+  const pendingSelectId = useRef(location.state?.conversationId ?? null);
   const messagesEndRef = useRef(null);
 
-  useEffect(() => { loadStats(); loadAccounts(); }, []);
+  useEffect(() => { loadStats(); loadAccounts(); loadHubSettings(); }, []);
   useEffect(() => { loadConvos(); }, [filterStatus, filterPlatform]);
   useEffect(() => { if (selected) loadMessages(selected.id); }, [selected]);
   useEffect(() => { messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [messages]);
@@ -72,6 +82,73 @@ export default function CommHub() {
     const t = setInterval(() => { loadStats(); loadConvos(); }, 15000);
     return () => clearInterval(t);
   }, [tab, filterStatus, filterPlatform]);
+
+  async function loadHubSettings() {
+    try {
+      const r = await apiFetch('/api/hub-settings/comms');
+      if (r.ok) {
+        const d = await r.json();
+        setHubPrompt(d.system_prompt || '');
+        setHubKbName(d.knowledge_base_name || '');
+      }
+    } catch {}
+  }
+
+  async function saveHubPrompt() {
+    setHubSaving(true);
+    setHubSettingsMsg(null);
+    try {
+      const r = await apiFetch('/api/hub-settings/comms', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ system_prompt: hubPrompt }),
+      });
+      setHubSettingsMsg(r.ok ? { type: 'ok', text: '✓ Prompt 已儲存' } : { type: 'err', text: '儲存失敗' });
+    } catch { setHubSettingsMsg({ type: 'err', text: '儲存失敗' }); }
+    setHubSaving(false);
+    setTimeout(() => setHubSettingsMsg(null), 3000);
+  }
+
+  async function uploadHubKb() {
+    if (!hubKbFile) return;
+    setHubKbUploading(true);
+    setHubSettingsMsg(null);
+    try {
+      const reader = new FileReader();
+      reader.onload = async (e) => {
+        try {
+          const base64 = e.target.result.split(',')[1];
+          const ext = hubKbFile.name.split('.').pop().toLowerCase();
+          const r = await apiFetch('/api/hub-settings/comms/upload', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name: hubKbFile.name, file_base64: base64, format: ext }),
+          });
+          if (r.ok) {
+            setHubKbName(hubKbFile.name);
+            setHubKbFile(null);
+            if (hubKbFileRef.current) hubKbFileRef.current.value = '';
+            setHubSettingsMsg({ type: 'ok', text: '✓ 知識庫已上傳' });
+          } else {
+            setHubSettingsMsg({ type: 'err', text: '上傳失敗' });
+          }
+        } finally { setHubKbUploading(false); }
+      };
+      reader.readAsDataURL(hubKbFile);
+    } catch { setHubKbUploading(false); setHubSettingsMsg({ type: 'err', text: '上傳失敗' }); }
+    setTimeout(() => setHubSettingsMsg(null), 3000);
+  }
+
+  async function deleteHubKb() {
+    try {
+      await apiFetch('/api/hub-settings/comms/kb', { method: 'DELETE' });
+      setHubKbName('');
+      setHubKbFile(null);
+      if (hubKbFileRef.current) hubKbFileRef.current.value = '';
+      setHubSettingsMsg({ type: 'ok', text: '✓ 知識庫已移除' });
+    } catch { setHubSettingsMsg({ type: 'err', text: '移除失敗' }); }
+    setTimeout(() => setHubSettingsMsg(null), 3000);
+  }
 
   async function loadStats() {
     try {
@@ -105,7 +182,17 @@ export default function CommHub() {
       if (filterStatus) url += `status=${filterStatus}&`;
       if (filterPlatform) url += `platform=${filterPlatform}&`;
       const r = await apiFetch(url);
-      if (r.ok) setConvos(await r.json());
+      if (r.ok) {
+        const data = await r.json();
+        setConvos(data);
+        if (pendingSelectId.current) {
+          const target = data.find(c => c.id === pendingSelectId.current);
+          if (target) {
+            setSelected(target);
+            pendingSelectId.current = null;
+          }
+        }
+      }
     } catch {}
   }
 
@@ -242,7 +329,7 @@ export default function CommHub() {
 
       {/* Tabs */}
       <div className="flex items-center gap-1 mb-4 border-b border-gray-200">
-        {[['inbox','📬 統一收件匣'],['simulate','⚡ 模擬測試'],['accounts','🔗 帳號管理']].map(([t, label]) => (
+        {[['inbox','📬 統一收件匣'],['simulate','⚡ 模擬測試'],['accounts','🔗 帳號管理'],['settings','⚙️ AI 設定']].map(([t, label]) => (
           <button key={t} onClick={() => setTab(t)}
             className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${tab === t ? 'border-blue-500 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700'}`}>
             {label}
@@ -574,6 +661,70 @@ export default function CommHub() {
               </div>
             </div>
           )}
+        </div>
+      )}
+
+      {tab === 'settings' && (
+        <div className="flex-1 bg-white rounded-2xl shadow-sm border border-gray-100 p-6 max-w-2xl">
+          <h2 className="text-lg font-semibold text-gray-800 mb-1">AI 設定</h2>
+          <p className="text-sm text-gray-500 mb-6">設定通訊中台 AI 的角色與知識庫，影響所有 AI 自動回覆和規則引擎</p>
+
+          {hubSettingsMsg && (
+            <div className={`mb-4 text-sm px-4 py-2.5 rounded-xl ${hubSettingsMsg.type === 'ok' ? 'bg-green-50 text-green-700 border border-green-200' : 'bg-red-50 text-red-700 border border-red-200'}`}>
+              {hubSettingsMsg.text}
+            </div>
+          )}
+
+          <div className="space-y-6">
+            <div>
+              <label className="text-sm font-medium text-gray-700 mb-2 block">AI 系統 Prompt</label>
+              <p className="text-xs text-gray-400 mb-2">AI 的角色設定、回覆風格、品牌語調等。留空則使用預設客服設定。</p>
+              <textarea
+                value={hubPrompt}
+                onChange={e => setHubPrompt(e.target.value)}
+                rows={8}
+                placeholder={`例：你是「品牌名稱」的專業客服，使用繁體中文，語氣親切有禮。回覆要簡短精準，不超過 3 句話。如果客戶詢問退款，請引導至 refund@brand.com。`}
+                className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-blue-300 font-mono"
+              />
+              <button
+                onClick={saveHubPrompt}
+                disabled={hubSaving}
+                className="mt-2 px-4 py-2 bg-blue-600 text-white rounded-xl text-sm font-medium hover:bg-blue-700 transition-colors disabled:opacity-50">
+                {hubSaving ? '儲存中…' : '儲存 Prompt'}
+              </button>
+            </div>
+
+            <div className="border-t border-gray-100 pt-6">
+              <label className="text-sm font-medium text-gray-700 mb-2 block">產品知識庫</label>
+              <p className="text-xs text-gray-400 mb-3">上傳 PDF、TXT 或 MD 文件，AI 在回覆時會自動讀取作為背景知識（最多 8000 字元）</p>
+              {hubKbName && (
+                <div className="flex items-center gap-3 mb-3 p-3 bg-blue-50 rounded-xl border border-blue-100">
+                  <span className="text-base">📄</span>
+                  <span className="text-sm text-blue-800 flex-1 truncate">{hubKbName}</span>
+                  <button
+                    onClick={deleteHubKb}
+                    className="text-xs px-2 py-1 bg-red-100 text-red-600 rounded-lg hover:bg-red-200 transition-colors">
+                    移除
+                  </button>
+                </div>
+              )}
+              <div className="flex items-center gap-3">
+                <input
+                  ref={hubKbFileRef}
+                  type="file"
+                  accept=".pdf,.txt,.md"
+                  onChange={e => setHubKbFile(e.target.files[0] || null)}
+                  className="text-sm text-gray-500 flex-1"
+                />
+                <button
+                  onClick={uploadHubKb}
+                  disabled={!hubKbFile || hubKbUploading}
+                  className="px-4 py-2 bg-green-600 text-white rounded-xl text-sm font-medium hover:bg-green-700 transition-colors disabled:opacity-50 whitespace-nowrap">
+                  {hubKbUploading ? '上傳中…' : '上傳文件'}
+                </button>
+              </div>
+            </div>
+          </div>
         </div>
       )}
     </div>

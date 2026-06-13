@@ -304,6 +304,16 @@ function initTables() {
       sample_path TEXT NOT NULL,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP
     );
+
+    -- Hub 設定（通訊/語音中台 Prompt + 知識庫；不可被 seed 清空）
+    CREATE TABLE IF NOT EXISTS hub_configs (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      hub_type TEXT NOT NULL UNIQUE,
+      system_prompt TEXT DEFAULT '',
+      knowledge_base_path TEXT DEFAULT '',
+      knowledge_base_name TEXT DEFAULT '',
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
   `);
   // Migrations for existing DBs that predate these columns
   try { exec(`ALTER TABLE workflows ADD COLUMN category TEXT DEFAULT 'general'`); } catch (_) {}

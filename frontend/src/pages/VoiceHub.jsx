@@ -139,6 +139,14 @@ export default function VoiceHub() {
   const [cloneName, setCloneName] = useState('');
   const [cloneUploading, setCloneUploading] = useState(false);
   const cloneFileRef = useRef(null);
+  // AI 設定
+  const [voicePrompt, setVoicePrompt] = useState('');
+  const [voiceKbName, setVoiceKbName] = useState('');
+  const [voiceKbFile, setVoiceKbFile] = useState(null);
+  const [voiceSettingsSaving, setVoiceSettingsSaving] = useState(false);
+  const [voiceKbUploading, setVoiceKbUploading] = useState(false);
+  const [voiceSettingsMsg, setVoiceSettingsMsg] = useState(null);
+  const voiceKbFileRef = useRef(null);
 
   const convoIdRef = useRef(null);
   const activeRef = useRef(false);
@@ -165,6 +173,7 @@ export default function VoiceHub() {
       })
       .catch(() => { setVoicesError(true); });
     loadCalls();
+    loadVoiceSettings();
     return () => cleanup();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -179,6 +188,67 @@ export default function VoiceHub() {
       .then(data => setCalls(Array.isArray(data) ? data : []))
       .catch(() => {});
   };
+
+  function loadVoiceSettings() {
+    apiFetch('/api/hub-settings/voice')
+      .then(r => r.json())
+      .then(d => { setVoicePrompt(d.system_prompt || ''); setVoiceKbName(d.knowledge_base_name || ''); })
+      .catch(() => {});
+  }
+
+  async function saveVoicePrompt() {
+    setVoiceSettingsSaving(true);
+    setVoiceSettingsMsg(null);
+    try {
+      const r = await apiFetch('/api/hub-settings/voice', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ system_prompt: voicePrompt }),
+      });
+      setVoiceSettingsMsg(r.ok ? { ok: true, text: '✓ Prompt 已儲存' } : { ok: false, text: '儲存失敗' });
+    } catch { setVoiceSettingsMsg({ ok: false, text: '儲存失敗' }); }
+    setVoiceSettingsSaving(false);
+    setTimeout(() => setVoiceSettingsMsg(null), 3000);
+  }
+
+  async function uploadVoiceKb() {
+    if (!voiceKbFile) return;
+    setVoiceKbUploading(true);
+    setVoiceSettingsMsg(null);
+    const reader = new FileReader();
+    reader.onload = async (e) => {
+      try {
+        const base64 = e.target.result.split(',')[1];
+        const ext = voiceKbFile.name.split('.').pop().toLowerCase();
+        const r = await apiFetch('/api/hub-settings/voice/upload', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name: voiceKbFile.name, file_base64: base64, format: ext }),
+        });
+        if (r.ok) {
+          setVoiceKbName(voiceKbFile.name);
+          setVoiceKbFile(null);
+          if (voiceKbFileRef.current) voiceKbFileRef.current.value = '';
+          setVoiceSettingsMsg({ ok: true, text: '✓ 知識庫已上傳' });
+        } else {
+          setVoiceSettingsMsg({ ok: false, text: '上傳失敗' });
+        }
+      } finally { setVoiceKbUploading(false); }
+    };
+    reader.readAsDataURL(voiceKbFile);
+    setTimeout(() => setVoiceSettingsMsg(null), 4000);
+  }
+
+  async function deleteVoiceKb() {
+    try {
+      await apiFetch('/api/hub-settings/voice/kb', { method: 'DELETE' });
+      setVoiceKbName('');
+      setVoiceKbFile(null);
+      if (voiceKbFileRef.current) voiceKbFileRef.current.value = '';
+      setVoiceSettingsMsg({ ok: true, text: '✓ 知識庫已移除' });
+    } catch { setVoiceSettingsMsg({ ok: false, text: '移除失敗' }); }
+    setTimeout(() => setVoiceSettingsMsg(null), 3000);
+  }
 
   function cleanup() {
     activeRef.current = false;
@@ -558,6 +628,55 @@ export default function VoiceHub() {
                 {cloneUploading ? '上傳中…' : '🎙 複製我的聲音'}
               </button>
             </div>
+
+            {/* AI 設定 — 可折疊 */}
+            <details style={{ borderTop: '1px solid #2a2d3e', marginTop: 10, paddingTop: 10 }}>
+              <summary style={{ fontSize: 11, color: '#9ca3af', cursor: 'pointer', fontWeight: 600, letterSpacing: '0.06em', userSelect: 'none' }}>
+                ⚙️ AI 設定（Prompt & 知識庫）
+              </summary>
+              <div style={{ marginTop: 8, display: 'flex', flexDirection: 'column', gap: 8 }}>
+                {voiceSettingsMsg && (
+                  <div style={{ fontSize: 11, padding: '5px 8px', borderRadius: 6, background: voiceSettingsMsg.ok ? 'rgba(16,185,129,0.1)' : 'rgba(239,68,68,0.1)', color: voiceSettingsMsg.ok ? '#34d399' : '#f87171', border: `1px solid ${voiceSettingsMsg.ok ? 'rgba(16,185,129,0.3)' : 'rgba(239,68,68,0.3)'}` }}>
+                    {voiceSettingsMsg.text}
+                  </div>
+                )}
+                <div style={{ fontSize: 10, color: '#6b7280' }}>語音 AI 角色設定（留空使用預設）</div>
+                <textarea
+                  value={voicePrompt}
+                  onChange={e => setVoicePrompt(e.target.value)}
+                  rows={5}
+                  placeholder="例：你是一位台灣電商的語音客服，語氣親切口語，不超過 60 字…"
+                  style={{ width: '100%', background: '#0f1117', border: '1px solid #2a2d3e', borderRadius: 6, padding: '6px 8px', color: '#f9fafb', fontSize: 11, outline: 'none', boxSizing: 'border-box', resize: 'vertical', fontFamily: 'monospace' }}
+                />
+                <button
+                  onClick={saveVoicePrompt}
+                  disabled={voiceSettingsSaving}
+                  style={{ padding: '5px 0', borderRadius: 6, fontSize: 11, fontWeight: 600, background: 'rgba(59,130,246,0.15)', border: '1px solid rgba(59,130,246,0.3)', color: '#60a5fa', cursor: voiceSettingsSaving ? 'wait' : 'pointer', width: '100%' }}>
+                  {voiceSettingsSaving ? '儲存中…' : '儲存 Prompt'}
+                </button>
+                <div style={{ fontSize: 10, color: '#6b7280', marginTop: 4 }}>產品知識庫（PDF / TXT / MD）</div>
+                {voiceKbName && (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'rgba(20,184,166,0.08)', border: '1px solid rgba(20,184,166,0.2)', borderRadius: 6, padding: '5px 8px' }}>
+                    <span style={{ fontSize: 12 }}>📄</span>
+                    <span style={{ fontSize: 11, color: '#14b8a6', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{voiceKbName}</span>
+                    <button onClick={deleteVoiceKb} style={{ fontSize: 10, color: '#f87171', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>移除</button>
+                  </div>
+                )}
+                <input
+                  ref={voiceKbFileRef}
+                  type="file"
+                  accept=".pdf,.txt,.md"
+                  onChange={e => setVoiceKbFile(e.target.files[0] || null)}
+                  style={{ fontSize: 11, color: '#9ca3af', width: '100%' }}
+                />
+                <button
+                  onClick={uploadVoiceKb}
+                  disabled={!voiceKbFile || voiceKbUploading}
+                  style={{ padding: '5px 0', borderRadius: 6, fontSize: 11, fontWeight: 600, background: (!voiceKbFile || voiceKbUploading) ? '#1a1d2e' : 'rgba(20,184,166,0.15)', border: '1px solid rgba(20,184,166,0.3)', color: (!voiceKbFile || voiceKbUploading) ? '#4b5563' : '#14b8a6', cursor: (!voiceKbFile || voiceKbUploading) ? 'not-allowed' : 'pointer', width: '100%' }}>
+                  {voiceKbUploading ? '上傳中…' : '上傳知識庫'}
+                </button>
+              </div>
+            </details>
           </div>
 
           <div style={{ marginTop: 8 }}>
@@ -772,7 +891,7 @@ export default function VoiceHub() {
                   </div>
                 </div>
                 <button
-                  onClick={() => navigate('/app/comms')}
+                  onClick={() => navigate('/app/comms', { state: { conversationId: c.id } })}
                   style={{
                     padding: '4px 12px',
                     borderRadius: 6,
