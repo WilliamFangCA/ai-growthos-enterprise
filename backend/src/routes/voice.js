@@ -9,9 +9,32 @@ const router = express.Router();
 const { callAI } = require('../aiRouter');
 const { synthesizeSpeech, synthesizeXTTS, VOICES, DEFAULT_VOICE } = require('../services/ttsRouter');
 const { run, get, all } = require('../db');
-const { readKnowledgeBase } = require('./hub-settings');
+const { readKnowledgeBase, registerCacheInvalidator } = require('./hub-settings');
 
 const VOICES_DIR = path.join(__dirname, '..', '..', 'data', 'voices');
+
+// ── 語音 Hub 設定快取（避免每輪通話都讀取 DB + 磁碟） ─────────────────────────
+let _voiceHubCache = null;
+let _voiceHubCacheTs = 0;
+const CACHE_TTL_MS = 60_000;
+
+async function getVoiceHubConfig() {
+  const now = Date.now();
+  if (_voiceHubCache && (now - _voiceHubCacheTs) < CACHE_TTL_MS) return _voiceHubCache;
+  const hubConfig = get('SELECT * FROM hub_configs WHERE hub_type = ?', ['voice']) || {};
+  const knowledgeText = await readKnowledgeBase(hubConfig.knowledge_base_path || '');
+  _voiceHubCache = {
+    systemPromptBase: hubConfig.system_prompt || '',
+    knowledgeText: knowledgeText.slice(0, 2000),
+  };
+  _voiceHubCacheTs = now;
+  return _voiceHubCache;
+}
+
+// 當 hub-settings 更新語音設定時，讓快取失效
+registerCacheInvalidator((hubType) => {
+  if (hubType === 'voice') { _voiceHubCache = null; _voiceHubCacheTs = 0; }
+});
 if (!fs.existsSync(VOICES_DIR)) fs.mkdirSync(VOICES_DIR, { recursive: true });
 
 const LANGUAGE_INSTRUCTIONS = {
@@ -100,35 +123,46 @@ router.post('/call/:id/turn', async (req, res) => {
       [conversationId, 'inbound', text.trim(), 'voice_transcript', 'human']
     );
 
-    // 帶最近 12 則對話歷史
+    // 帶最近 6 則對話歷史（3 輪；快取讀取，不每次查 DB）
     const history = all(
       `SELECT direction, content, message_type FROM messages
        WHERE conversation_id = ? AND message_type != 'system'
-       ORDER BY sent_at DESC, id DESC LIMIT 12`,
+       ORDER BY sent_at DESC, id DESC LIMIT 6`,
       [conversationId]
     ).reverse();
     const historyText = history
       .map(m => `${m.direction === 'inbound' ? '客戶' : 'AI'}：${m.content}`)
       .join('\n');
 
-    const hubConfig = get('SELECT * FROM hub_configs WHERE hub_type = ?', ['voice']) || {};
-    const knowledgeText = await readKnowledgeBase(hubConfig.knowledge_base_path || '');
+    const { systemPromptBase, knowledgeText } = await getVoiceHubConfig();
     const baseRules =
       '回覆規則：1) 像真人講電話一樣自然口語，簡短扼要（最多 80 字）；' +
       '2) 絕對不要使用 markdown、條列符號、emoji 或特殊符號（回覆會被轉成語音唸出來）；' +
       '3) 有同理心、主動解決問題，不確定時禮貌詢問細節。' +
       (LANGUAGE_INSTRUCTIONS[language] || LANGUAGE_INSTRUCTIONS['zh-TW']);
     const systemPrompt = [
-      hubConfig.system_prompt || '你是 AI GrowthOS 的語音客服，正在跟客戶進行即時語音通話。',
+      systemPromptBase || '你是 AI GrowthOS 的語音客服，正在跟客戶進行即時語音通話。',
       knowledgeText ? `\n\n【產品知識庫】\n${knowledgeText}` : '',
       `\n\n${baseRules}`,
     ].join('');
 
-    const result = await callAI(
-      `通話逐字稿：\n${historyText}\n\n請以語音客服身分回覆客戶最後一句話。`,
-      systemPrompt,
-      { model: 'glm-5-turbo', maxTokens: 250, language }
-    );
+    // 6 秒逾時保護：避免 AI 提供商延遲卡住整個通話
+    let result;
+    try {
+      result = await Promise.race([
+        callAI(
+          `通話逐字稿：\n${historyText}\n\n請以語音客服身分回覆客戶最後一句話。`,
+          systemPrompt,
+          { model: 'glm-5-turbo', maxTokens: 120, language }
+        ),
+        new Promise((_, rej) => setTimeout(() => rej(new Error('ai_timeout')), 6000)),
+      ]);
+    } catch (_) {
+      result = {
+        content: language === 'en' ? 'Sorry, one moment please.' : '抱歉，請稍等一下。',
+        model: 'fallback', source: 'timeout',
+      };
+    }
 
     // 清掉可能殘留的 markdown 符號，避免 TTS 唸出怪聲
     const replyText = result.content.replace(/[*#`>\-]{2,}|[*#`]/g, '').trim();

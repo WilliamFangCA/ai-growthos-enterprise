@@ -153,6 +153,8 @@ export default function VoiceHub() {
   const statusRef = useRef('idle');
   const recognitionRef = useRef(null);
   const audioRef = useRef(null);
+  const bargeInRef = useRef(null);
+  const audioAbortRef = useRef(null);
   const durationTimerRef = useRef(null);
   const voiceRef = useRef(selectedVoice);
   const transcriptEndRef = useRef(null);
@@ -254,6 +256,9 @@ export default function VoiceHub() {
     activeRef.current = false;
     try { recognitionRef.current?.abort(); } catch {}
     recognitionRef.current = null;
+    try { bargeInRef.current?.abort(); } catch {}
+    bargeInRef.current = null;
+    audioAbortRef.current = null;
     if (audioRef.current) { try { audioRef.current.pause(); } catch {} audioRef.current = null; }
     try { window.speechSynthesis?.cancel(); } catch {}
     if (durationTimerRef.current) { clearInterval(durationTimerRef.current); durationTimerRef.current = null; }
@@ -262,13 +267,13 @@ export default function VoiceHub() {
   // ── 播放 AI 語音 ──────────────────────────────────────────────────────────
   function playBase64Mp3(b64) {
     return new Promise(resolve => {
-      if (audioRef.current) {
-        try { audioRef.current.pause(); } catch {}
-      }
+      if (audioRef.current) { try { audioRef.current.pause(); } catch {} }
       const audio = new Audio('data:audio/mp3;base64,' + b64);
       audioRef.current = audio;
       let settled = false;
       const finish = () => { if (!settled) { settled = true; resolve(); } };
+      // Expose abort so barge-in can cut audio mid-sentence
+      audioAbortRef.current = () => { try { audio.pause(); } catch {} finish(); };
       audio.onended = finish;
       audio.onerror = finish;
       const guard = setTimeout(finish, 30000);
@@ -284,6 +289,7 @@ export default function VoiceHub() {
         u.lang = REC_LANG[language] || 'zh-TW';
         let settled = false;
         const finish = () => { if (!settled) { settled = true; resolve(); } };
+        audioAbortRef.current = () => { try { window.speechSynthesis.cancel(); } catch {} finish(); };
         u.onend = finish;
         u.onerror = finish;
         setTimeout(finish, 20000);
@@ -292,6 +298,33 @@ export default function VoiceHub() {
         resolve();
       }
     });
+  }
+
+  // ── 插話偵測 ──────────────────────────────────────────────────────────────
+  function stopBargeIn() {
+    try { bargeInRef.current?.abort(); } catch {}
+    bargeInRef.current = null;
+  }
+
+  function startBargeIn(onText) {
+    stopBargeIn();
+    if (!SR || !activeRef.current) return;
+    const rec = new SR();
+    bargeInRef.current = rec;
+    rec.lang = REC_LANG[language] || 'zh-TW';
+    rec.interimResults = false;
+    rec.continuous = false;
+    rec.onresult = (e) => {
+      for (let i = e.resultIndex; i < e.results.length; i++) {
+        if (e.results[i].isFinal) {
+          const txt = e.results[i][0].transcript.trim();
+          if (txt) { stopBargeIn(); onText(txt); }
+        }
+      }
+    };
+    rec.onerror = () => {};
+    rec.onend = () => {};
+    try { rec.start(); } catch {}
   }
 
   // ── 語音辨識 ──────────────────────────────────────────────────────────────
@@ -342,11 +375,13 @@ export default function VoiceHub() {
     try { rec.start(); } catch {}
   }
 
-  // ── 一輪對話 ──────────────────────────────────────────────────────────────
+  // ── 一輪對話（含插話支援） ────────────────────────────────────────────────
   async function sendTurn(text) {
     setInterim('');
     setTranscript(prev => [...prev, { role: 'user', text }]);
     setStatusBoth('thinking');
+
+    let nextTurnText = null;
 
     try {
       const res = await apiFetch(`/api/voice/call/${convoIdRef.current}/turn`, {
@@ -361,17 +396,38 @@ export default function VoiceHub() {
       setTranscript(prev => [...prev, { role: 'ai', text: data.reply }]);
       setStatusBoth('speaking');
 
+      // 500ms 後啟動插話偵測（避免麥克風接收到 AI 開口的第一個音節）
+      let bargeInText = '';
+      const bargeInTimerId = setTimeout(() => {
+        if (!activeRef.current || statusRef.current !== 'speaking') return;
+        startBargeIn((capturedText) => {
+          bargeInText = capturedText;
+          audioAbortRef.current?.(); // 立即中斷 AI 語音
+        });
+      }, 500);
+
       if (data.audio) {
         await playBase64Mp3(data.audio);
       } else {
         setToast({ message: t('vhBrowserVoiceFallback'), type: 'error' });
         await speakWithBrowser(data.reply);
       }
+
+      clearTimeout(bargeInTimerId);
+      stopBargeIn();
+      if (bargeInText) nextTurnText = bargeInText;
+
     } catch (err) {
+      stopBargeIn();
       if (activeRef.current) setToast({ message: err.message, type: 'error' });
     }
 
-    if (activeRef.current) {
+    if (!activeRef.current) return;
+
+    if (nextTurnText) {
+      // 插話：直接銜接下一輪，不等待 300ms
+      await sendTurn(nextTurnText);
+    } else {
       await new Promise(r => setTimeout(r, 300));
       startListening();
     }

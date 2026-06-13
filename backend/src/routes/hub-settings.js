@@ -7,6 +7,14 @@ const { run, get } = require('../db');
 const KB_DIR = path.join(__dirname, '..', '..', 'data', 'knowledge-base');
 if (!fs.existsSync(KB_DIR)) fs.mkdirSync(KB_DIR, { recursive: true });
 
+// Cache invalidation registry — other modules (voice.js) register callbacks here
+// to avoid circular require dependencies
+const _cacheInvalidators = [];
+function registerCacheInvalidator(fn) { _cacheInvalidators.push(fn); }
+function triggerCacheInvalidation(hubType) {
+  for (const fn of _cacheInvalidators) { try { fn(hubType); } catch {} }
+}
+
 // GET /api/hub-settings/:hubType
 router.get('/:hubType', (req, res) => {
   try {
@@ -26,6 +34,7 @@ router.post('/:hubType', (req, res) => {
        ON CONFLICT(hub_type) DO UPDATE SET system_prompt = excluded.system_prompt, updated_at = CURRENT_TIMESTAMP`,
       [req.params.hubType, system_prompt || '']
     );
+    triggerCacheInvalidation(req.params.hubType);
     res.json({ success: true });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -48,6 +57,7 @@ router.post('/:hubType/upload', (req, res) => {
        knowledge_base_name = excluded.knowledge_base_name, updated_at = CURRENT_TIMESTAMP`,
       [req.params.hubType, filepath, name]
     );
+    triggerCacheInvalidation(req.params.hubType);
     res.json({ success: true, name });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -65,6 +75,7 @@ router.delete('/:hubType/kb', (req, res) => {
       `UPDATE hub_configs SET knowledge_base_path = '', knowledge_base_name = '', updated_at = CURRENT_TIMESTAMP WHERE hub_type = ?`,
       [req.params.hubType]
     );
+    triggerCacheInvalidation(req.params.hubType);
     res.json({ success: true });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -88,3 +99,4 @@ async function readKnowledgeBase(filepath) {
 
 module.exports = router;
 module.exports.readKnowledgeBase = readKnowledgeBase;
+module.exports.registerCacheInvalidator = registerCacheInvalidator;
