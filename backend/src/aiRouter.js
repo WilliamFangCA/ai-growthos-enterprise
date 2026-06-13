@@ -45,6 +45,71 @@ async function withRetry(fn, provider, attempts = 3) {
   return null;
 }
 
+const MOCK_RESPONSES_ZH = {
+  article: `（模擬結果 — AI 服務暫時無法連線，以下為範例輸出）
+
+# AI 行銷自動化：2026 實戰指南
+
+**情境（Situation）：** 行銷團隊如今要管理的渠道數量是三年前的 5 倍。
+
+**衝突（Conflict）：** 渠道越多，雜訊越多——沒有智能調度，流量不會自動變成營收。
+
+**疑問（Question）：** 頂尖團隊是怎麼穿越這片複雜度的？
+
+**答案（Answer）：** 從每一次互動中學習的 AI 原生自動化。
+
+關鍵戰術：
+1. 預測式名單評分取代靜態規則
+2. 內容隨買家階段自動調整
+3. 流失模型提前 14 天觸發挽留動作
+4. 多觸點歸因淘汰虛榮指標`,
+
+  social: `（模擬結果 — AI 服務暫時無法連線，以下為範例輸出）
+
+🚀 你的競爭對手已經在用 AI 搶你的客戶了。
+
+當他們在規模化做個人化行銷時，多數團隊還在複製貼上模板。
+
+AI 驅動的成長實際長這樣：
+✅ 同樣的廣告預算，3 倍的商機
+✅ 流失徵兆提前 2 週被偵測
+✅ 內容會轉化，因為它建立在真實數據上
+
+#AI行銷 #GrowthOS #B2BSaaS #行銷自動化`,
+
+  ad: `（模擬結果 — AI 服務暫時無法連線，以下為範例輸出）
+
+**別再讓營收從指縫溜走**
+
+→ 注意（Attention）：68% 的行銷預算浪費在錯誤的受眾上。
+→ 興趣（Interest）：AI GrowthOS 自動分析每一個訊號。
+→ 慾望（Desire）：客戶在 90 天內平均提升 40% 轉化率。
+→ 行動（Action）：立即免費試用，無需信用卡。
+
+[免費試用 AI GrowthOS →]`,
+
+  campaign: `（模擬結果 — AI 服務暫時無法連線，以下為範例輸出）
+
+## 活動企劃：「解鎖 Q3」成長計畫
+
+**工具（Tool）：** AI GrowthOS 全功能試用
+**場景（Implementation）：** LinkedIn 開發信 + 內容 SEO + 夥伴聯合行銷
+**包裝（Packaging）：** 「Q3 成長健檢」— 免費 30 分鐘 AI 漏斗分析
+
+時間線：W1-2 內容上線 → W3-4 開發信 → W5-6 線上講座 → W7-8 轉化衝刺
+預算：$8,000｜目標：200 MQL｜CAC 目標：<$200`,
+
+  default: `（模擬結果 — AI 服務暫時無法連線，以下為範例輸出）
+
+根據分析，我的策略建議如下：
+
+關鍵洞察：多數失敗源自「訊息、受眾、時機」三者錯位，AI 驅動的系統能同時解決這三個問題。
+
+建議：從價值最高的客群開始，為每個觸點埋設追蹤，讓數據引導優化。
+
+下一步：定義 ICP → 漏斗埋點 → 部署自動觸發 → 每週覆盤。`,
+};
+
 const MOCK_RESPONSES = {
   article: `# AI Marketing Automation: The 2026 Playbook
 
@@ -150,14 +215,34 @@ const OLLAMA_MODELS = new Set([
   'ollama/mistral',
 ]);
 
+const OPENAI_MODELS = new Set([
+  'gpt-4o',
+  'gpt-4o-mini',
+  'gpt-4-turbo',
+  'gpt-4',
+  'gpt-3.5-turbo',
+  'o1-mini',
+  'o3-mini',
+]);
+
+const GEMINI_MODELS = new Set([
+  'gemini-2.0-flash',
+  'gemini-2.0-flash-lite',
+  'gemini-1.5-flash',
+  'gemini-1.5-pro',
+  'gemini-2.5-flash-preview-04-17',
+]);
+
 // 預設 fallback 優先順序：主模型失敗時依序嘗試
 const FALLBACK_CHAIN = [
   { model: 'glm-5-turbo',                          provider: 'glm'        },
-  { model: 'MiniMax-M3',                            provider: 'minimax'    },
-  { model: 'MiniMax-M2.7-highspeed',                provider: 'minimax'    },
+  { model: 'gpt-4o-mini',                          provider: 'openai'     },
+  { model: 'gemini-2.0-flash',                     provider: 'gemini'     },
+  { model: 'MiniMax-M3',                           provider: 'minimax'    },
+  { model: 'MiniMax-M2.7-highspeed',               provider: 'minimax'    },
   { model: 'nvidia/nemotron-3-ultra-550b-a55b:free', provider: 'openrouter' },
-  { model: 'claude-sonnet-4-6',                     provider: 'claude'     },
-  { model: 'ollama/llama3.2',                       provider: 'ollama'     },
+  { model: 'claude-sonnet-4-6',                    provider: 'claude'     },
+  { model: 'ollama/llama3.2',                      provider: 'ollama'     },
 ];
 
 function buildUserContent(prompt, images = []) {
@@ -345,10 +430,80 @@ async function callOllama(prompt, systemPrompt, model, maxTokens, temperature) {
   }
 }
 
+async function callOpenAI(prompt, systemPrompt, model, maxTokens, temperature) {
+  const apiKey = process.env.OPENAI_API_KEY;
+  if (!apiKey) return null;
+
+  const oaiModel = OPENAI_MODELS.has(model) ? model : 'gpt-4o-mini';
+
+  const response = await fetch('https://api.openai.com/v1/chat/completions', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${apiKey}`,
+    },
+    body: JSON.stringify({
+      model: oaiModel,
+      max_tokens: maxTokens,
+      temperature,
+      messages: [
+        ...(systemPrompt ? [{ role: 'system', content: systemPrompt }] : []),
+        { role: 'user', content: prompt },
+      ],
+    }),
+    signal: AbortSignal.timeout(30000),
+  });
+
+  const data = await response.json();
+  if (!response.ok) {
+    console.warn('[aiRouter] OpenAI error:', data.error?.message || response.status);
+    return null;
+  }
+
+  const content = data.choices?.[0]?.message?.content || '';
+  const tokensUsed = (data.usage?.prompt_tokens || 0) + (data.usage?.completion_tokens || 0);
+  return { content, model: oaiModel, tokensUsed, source: 'openai' };
+}
+
+async function callGemini(prompt, systemPrompt, model, maxTokens, temperature) {
+  const apiKey = process.env.GEMINI_API_KEY;
+  if (!apiKey) return null;
+
+  const geminiModel = GEMINI_MODELS.has(model) ? model : 'gemini-2.0-flash';
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${geminiModel}:generateContent?key=${apiKey}`;
+
+  const body = {
+    contents: [{ role: 'user', parts: [{ text: prompt }] }],
+    generationConfig: { maxOutputTokens: maxTokens, temperature },
+  };
+  if (systemPrompt) {
+    body.systemInstruction = { parts: [{ text: systemPrompt }] };
+  }
+
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+    signal: AbortSignal.timeout(30000),
+  });
+
+  const data = await response.json();
+  if (!response.ok) {
+    console.warn('[aiRouter] Gemini error:', data.error?.message || response.status);
+    return null;
+  }
+
+  const content = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
+  const tokensUsed = (data.usageMetadata?.promptTokenCount || 0) + (data.usageMetadata?.candidatesTokenCount || 0);
+  return { content, model: geminiModel, tokensUsed, source: 'gemini' };
+}
+
 function getProvider(model) {
   if (model.startsWith('ollama/') || OLLAMA_MODELS.has(model)) return 'ollama';
   if (CLAUDE_MODELS.has(model) || model.startsWith('claude-'))  return 'claude';
   if (MINIMAX_MODELS.has(model) || model.startsWith('MiniMax-')) return 'minimax';
+  if (OPENAI_MODELS.has(model) || model.startsWith('gpt-') || model.startsWith('o1') || model.startsWith('o3')) return 'openai';
+  if (GEMINI_MODELS.has(model) || model.startsWith('gemini-')) return 'gemini';
   if (OPENROUTER_MODELS.has(model) || model.includes('/'))       return 'openrouter';
   return 'glm';
 }
@@ -361,6 +516,8 @@ async function dispatchModel(prompt, systemPrompt, model, maxTokens, temperature
     case 'openrouter': return callOpenRouter(prompt, systemPrompt, model, maxTokens, temperature);
     case 'claude':     return callClaude(prompt, systemPrompt, model, maxTokens, images);
     case 'ollama':     return callOllama(prompt, systemPrompt, model, maxTokens, temperature);
+    case 'openai':     return callOpenAI(prompt, systemPrompt, model, maxTokens, temperature);
+    case 'gemini':     return callGemini(prompt, systemPrompt, model, maxTokens, temperature);
     default:           return null;
   }
 }
@@ -405,8 +562,14 @@ async function callAI(prompt, systemPrompt, options = {}) {
   else if (lowerContext.includes('ad') || lowerContext.includes('廣告') || lowerContext.includes('aida')) mockKey = 'ad';
   else if (lowerContext.includes('campaign') || lowerContext.includes('活動') || lowerContext.includes('tip')) mockKey = 'campaign';
 
-  console.log('[aiRouter] All providers failed, using mock. key:', mockKey);
-  return { content: MOCK_RESPONSES[mockKey], model: 'mock', tokensUsed: 0, source: 'mock' };
+  // 語言選擇：options.language 優先，否則看 prompt 是否含 CJK 字元
+  const wantsChinese = options.language
+    ? options.language.startsWith('zh')
+    : /[一-鿿]/.test(prompt);
+  const mockSet = wantsChinese ? MOCK_RESPONSES_ZH : MOCK_RESPONSES;
+
+  console.log('[aiRouter] All providers failed, using mock. key:', mockKey, 'lang:', wantsChinese ? 'zh' : 'en');
+  return { content: mockSet[mockKey], model: 'mock', tokensUsed: 0, source: 'mock' };
 }
 
 function getCircuitStatus() {
