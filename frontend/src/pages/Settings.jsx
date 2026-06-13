@@ -874,7 +874,6 @@ function AccountCard({ account, colors, onChange, onDelete, platforms = MESSAGIN
       border: `1px solid ${colors.border}`,
       borderRadius: 12,
       marginBottom: 12,
-      overflow: 'hidden',
     }}>
       {/* ── Card header ── */}
       <div style={{
