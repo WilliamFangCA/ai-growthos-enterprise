@@ -73,7 +73,7 @@ app.use('/api/ai-rules', requireAuth, aiRulesRouter);
 app.use('/api/marketing', requireAuth, marketingRouter);
 app.use('/api/members', requireAuth, membersRouter);
 app.use('/api/tools', requireAuth, toolsRouter);
-app.use('/api/voice', requireAuth, voiceRouter);
+app.use('/api/voice', optionalAuth, voiceRouter);
 
 // 生成的媒體檔（圖片/影片/音樂）— 由 routes/content.js 寫入 backend/data/media
 const mediaDir = path.join(__dirname, '..', 'data', 'media');

@@ -100,6 +100,7 @@ export default function VoiceHub() {
   const navigate = useNavigate();
 
   const [voices, setVoices] = useState([]);
+  const [voicesError, setVoicesError] = useState(false);
   const [selectedVoice, setSelectedVoice] = useState('female-tianmei');
   const [previewing, setPreviewing] = useState(null);
   const [contactName, setContactName] = useState('');
@@ -133,7 +134,7 @@ export default function VoiceHub() {
         setVoices(data.voices || []);
         if (data.default) setSelectedVoice(data.default);
       })
-      .catch(() => {});
+      .catch(() => { setVoicesError(true); });
     loadCalls();
     return () => cleanup();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -365,6 +366,11 @@ export default function VoiceHub() {
             {t('vhVoiceSelect')}
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 4, overflowY: 'auto', maxHeight: 'calc(100vh - 360px)', paddingRight: 2 }}>
+            {voicesError && (
+              <div style={{ color: '#f87171', fontSize: 12, padding: '8px 4px' }}>
+                無法載入音色，請重新整理頁面
+              </div>
+            )}
             {/* 中文音色 */}
             {voices.filter(v => v.category === 'zh' || !v.category).length > 0 && (
               <div style={{ fontSize: 10, color: '#4b5563', letterSpacing: '0.06em', padding: '6px 2px 2px', fontWeight: 600 }}>
