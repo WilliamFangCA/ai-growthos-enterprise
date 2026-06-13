@@ -233,9 +233,27 @@ const GEMINI_MODELS = new Set([
   'gemini-2.5-flash-preview-04-17',
 ]);
 
+// Alibaba Cloud Model Studio (Qwen via OpenAI-compatible endpoint)
+const ALIBABA_MODELS = new Set([
+  'qwen-turbo',
+  'qwen-turbo-latest',
+  'qwen-plus',
+  'qwen-plus-latest',
+  'qwen-max',
+  'qwen-max-latest',
+  'qwen2.5-72b-instruct',
+  'qwen2.5-32b-instruct',
+  'qwen2.5-14b-instruct',
+  'qwen2.5-7b-instruct',
+  'qwen3-235b-a22b',
+  'qwen3-30b-a3b',
+]);
+
 // 預設 fallback 優先順序：主模型失敗時依序嘗試
 const FALLBACK_CHAIN = [
   { model: 'glm-5-turbo',                          provider: 'glm'        },
+  { model: 'qwen-turbo',                           provider: 'alibaba'    },
+  { model: 'qwen-plus',                            provider: 'alibaba'    },
   { model: 'gpt-4o-mini',                          provider: 'openai'     },
   { model: 'gemini-2.0-flash',                     provider: 'gemini'     },
   { model: 'MiniMax-M3',                           provider: 'minimax'    },
@@ -498,12 +516,55 @@ async function callGemini(prompt, systemPrompt, model, maxTokens, temperature) {
   return { content, model: geminiModel, tokensUsed, source: 'gemini' };
 }
 
+// Alibaba Cloud Model Studio — OpenAI-compatible endpoint
+async function callAlibaba(prompt, systemPrompt, model, maxTokens, temperature) {
+  const apiKey = process.env.ALIBABA_API_KEY;
+  const baseUrl = process.env.ALIBABA_BASE_URL || 'https://dashscope.aliyuncs.com/compatible-mode/v1';
+  if (!apiKey) return null;
+
+  const aliModel = ALIBABA_MODELS.has(model) ? model : 'qwen-turbo';
+
+  try {
+    const response = await fetch(`${baseUrl}/chat/completions`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify({
+        model: aliModel,
+        max_tokens: maxTokens,
+        temperature,
+        messages: [
+          ...(systemPrompt ? [{ role: 'system', content: systemPrompt }] : []),
+          { role: 'user', content: prompt },
+        ],
+      }),
+      signal: AbortSignal.timeout(30000),
+    });
+
+    const data = await response.json();
+    if (!response.ok) {
+      console.warn('[aiRouter] Alibaba error:', data.error?.message || response.status);
+      return null;
+    }
+
+    const content = data.choices?.[0]?.message?.content || '';
+    const tokensUsed = (data.usage?.prompt_tokens || 0) + (data.usage?.completion_tokens || 0);
+    return { content, model: aliModel, tokensUsed, source: 'alibaba' };
+  } catch (e) {
+    console.warn('[aiRouter] Alibaba failed:', e.message);
+    return null;
+  }
+}
+
 function getProvider(model) {
   if (model.startsWith('ollama/') || OLLAMA_MODELS.has(model)) return 'ollama';
   if (CLAUDE_MODELS.has(model) || model.startsWith('claude-'))  return 'claude';
   if (MINIMAX_MODELS.has(model) || model.startsWith('MiniMax-')) return 'minimax';
   if (OPENAI_MODELS.has(model) || model.startsWith('gpt-') || model.startsWith('o1') || model.startsWith('o3')) return 'openai';
   if (GEMINI_MODELS.has(model) || model.startsWith('gemini-')) return 'gemini';
+  if (ALIBABA_MODELS.has(model) || model.startsWith('qwen')) return 'alibaba';
   if (OPENROUTER_MODELS.has(model) || model.includes('/'))       return 'openrouter';
   return 'glm';
 }
@@ -518,6 +579,7 @@ async function dispatchModel(prompt, systemPrompt, model, maxTokens, temperature
     case 'ollama':     return callOllama(prompt, systemPrompt, model, maxTokens, temperature);
     case 'openai':     return callOpenAI(prompt, systemPrompt, model, maxTokens, temperature);
     case 'gemini':     return callGemini(prompt, systemPrompt, model, maxTokens, temperature);
+    case 'alibaba':    return callAlibaba(prompt, systemPrompt, model, maxTokens, temperature);
     default:           return null;
   }
 }

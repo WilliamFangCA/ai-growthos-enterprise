@@ -305,8 +305,12 @@ async function synthesizeCosyVoice(text, voice) {
   const apiKey = process.env.DASHSCOPE_API_KEY;
   if (!apiKey || !text) return null;
 
+  // 支援自定義工作區端點（DASHSCOPE_BASE_URL），預設用公有雲
+  const dsBase = (process.env.DASHSCOPE_BASE_URL || 'https://dashscope.aliyuncs.com/api/v1')
+    .replace(/\/$/, '');
+
   try {
-    const res = await fetch('https://dashscope.aliyuncs.com/api/v1/services/aigc/text2audio/speech-synthesis', {
+    const res = await fetch(`${dsBase}/services/aigc/text2audio/speech-synthesis`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
