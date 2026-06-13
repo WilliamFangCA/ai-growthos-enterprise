@@ -47,6 +47,7 @@ const PROVIDER_BADGE = {
   chatts:    { label: 'ChatTTS',   color: '#ec4899' },
   xtts:      { label: 'XTTS',      color: '#3b82f6' },
   cloned:    { label: '我的聲音',   color: '#14b8a6' },
+  volcano:   { label: '豆包 ARK',  color: '#f97316' },
 };
 
 function VoiceCard({ v, selected, inCall, previewing, language, t, onSelect, onPreview, onDelete }) {
@@ -608,6 +609,16 @@ export default function VoiceHub() {
               <VoiceCard key={v.id} v={v} selected={selectedVoice} inCall={inCall} previewing={previewing}
                 language={language} t={t} onSelect={setSelectedVoice} onPreview={previewVoice} />
             ))}
+            {/* Volcano ARK TTS */}
+            {voices.filter(v => v.category === 'volcano').length > 0 && (
+              <div style={{ fontSize: 10, color: '#f97316', letterSpacing: '0.06em', padding: '10px 2px 2px', fontWeight: 600 }}>
+                🌋 豆包語音（Volcano Engine ARK）
+              </div>
+            )}
+            {voices.filter(v => v.category === 'volcano').map(v => (
+              <VoiceCard key={v.id} v={v} selected={selectedVoice} inCall={inCall} previewing={previewing}
+                language={language} t={t} onSelect={setSelectedVoice} onPreview={previewVoice} />
+            ))}
             {/* CosyVoice */}
             {voices.filter(v => v.category === 'cosyvoice').length > 0 && (
               <div style={{ fontSize: 10, color: '#f59e0b', letterSpacing: '0.06em', padding: '10px 2px 2px', fontWeight: 600 }}>
@@ -686,10 +697,54 @@ export default function VoiceHub() {
               </button>
             </div>
 
-            {/* AI 設定 — 可折疊 */}
+            {/* AI 模型選擇 — 常駐顯示 */}
+            <div style={{ borderTop: '1px solid #2a2d3e', marginTop: 10, paddingTop: 10 }}>
+              <div style={{ fontSize: 10, color: '#6b7280', marginBottom: 4, fontWeight: 600, letterSpacing: '0.06em' }}>
+                🤖 AI 語言模型
+              </div>
+              <select
+                value={voiceAiModel}
+                onChange={e => setVoiceAiModel(e.target.value)}
+                style={{ width: '100%', background: '#0f1117', border: '1px solid #2a2d3e', borderRadius: 6, padding: '6px 8px', color: '#f9fafb', fontSize: 11, outline: 'none', boxSizing: 'border-box' }}>
+                <option value="">自動（系統預設 glm-5-turbo）</option>
+                <optgroup label="豆包 Doubao (Volcano Engine)">
+                  <option value="doubao-lite-32k">豆包 Lite 32K</option>
+                  <option value="doubao-pro-32k">豆包 Pro 32K</option>
+                </optgroup>
+                <optgroup label="GLM (智譜 ZhipuAI)">
+                  <option value="glm-5-turbo">GLM-5 Turbo</option>
+                  <option value="glm-5">GLM-5</option>
+                  <option value="glm-4.6">GLM-4.6</option>
+                </optgroup>
+                <optgroup label="通義千問 Qwen (Alibaba)">
+                  <option value="qwen-turbo">Qwen Turbo</option>
+                  <option value="qwen-plus">Qwen Plus</option>
+                  <option value="qwen-max">Qwen Max</option>
+                </optgroup>
+                <optgroup label="OpenAI">
+                  <option value="gpt-4o-mini">GPT-4o Mini</option>
+                  <option value="gpt-4o">GPT-4o</option>
+                </optgroup>
+                <optgroup label="Google Gemini">
+                  <option value="gemini-2.0-flash">Gemini 2.0 Flash</option>
+                  <option value="gemini-1.5-pro">Gemini 1.5 Pro</option>
+                </optgroup>
+                <optgroup label="MiniMax">
+                  <option value="MiniMax-M3">MiniMax M3</option>
+                </optgroup>
+              </select>
+              <button
+                onClick={saveVoicePrompt}
+                disabled={voiceSettingsSaving}
+                style={{ marginTop: 6, padding: '5px 0', borderRadius: 6, fontSize: 11, fontWeight: 600, background: 'rgba(59,130,246,0.15)', border: '1px solid rgba(59,130,246,0.3)', color: '#60a5fa', cursor: voiceSettingsSaving ? 'wait' : 'pointer', width: '100%' }}>
+                {voiceSettingsSaving ? '儲存中…' : '儲存模型'}
+              </button>
+            </div>
+
+            {/* AI 設定 — 可折疊（Prompt & 知識庫） */}
             <details style={{ borderTop: '1px solid #2a2d3e', marginTop: 10, paddingTop: 10 }}>
               <summary style={{ fontSize: 11, color: '#9ca3af', cursor: 'pointer', fontWeight: 600, letterSpacing: '0.06em', userSelect: 'none' }}>
-                ⚙️ AI 設定（Prompt & 知識庫）
+                ⚙️ Prompt & 知識庫設定
               </summary>
               <div style={{ marginTop: 8, display: 'flex', flexDirection: 'column', gap: 8 }}>
                 {voiceSettingsMsg && (
@@ -697,38 +752,6 @@ export default function VoiceHub() {
                     {voiceSettingsMsg.text}
                   </div>
                 )}
-                <div style={{ fontSize: 10, color: '#6b7280' }}>AI 模型（留空使用預設 glm-5-turbo）</div>
-                <select
-                  value={voiceAiModel}
-                  onChange={e => setVoiceAiModel(e.target.value)}
-                  style={{ width: '100%', background: '#0f1117', border: '1px solid #2a2d3e', borderRadius: 6, padding: '6px 8px', color: '#f9fafb', fontSize: 11, outline: 'none', boxSizing: 'border-box' }}>
-                  <option value="">自動（系統預設 glm-5-turbo）</option>
-                  <optgroup label="豆包 Doubao (Volcano Engine)">
-                    <option value="doubao-lite-32k">豆包 Lite 32K</option>
-                    <option value="doubao-pro-32k">豆包 Pro 32K</option>
-                  </optgroup>
-                  <optgroup label="GLM (智譜 ZhipuAI)">
-                    <option value="glm-5-turbo">GLM-5 Turbo</option>
-                    <option value="glm-5">GLM-5</option>
-                    <option value="glm-4.6">GLM-4.6</option>
-                  </optgroup>
-                  <optgroup label="通義千問 Qwen (Alibaba)">
-                    <option value="qwen-turbo">Qwen Turbo</option>
-                    <option value="qwen-plus">Qwen Plus</option>
-                    <option value="qwen-max">Qwen Max</option>
-                  </optgroup>
-                  <optgroup label="OpenAI">
-                    <option value="gpt-4o-mini">GPT-4o Mini</option>
-                    <option value="gpt-4o">GPT-4o</option>
-                  </optgroup>
-                  <optgroup label="Google Gemini">
-                    <option value="gemini-2.0-flash">Gemini 2.0 Flash</option>
-                    <option value="gemini-1.5-pro">Gemini 1.5 Pro</option>
-                  </optgroup>
-                  <optgroup label="MiniMax">
-                    <option value="MiniMax-M3">MiniMax M3</option>
-                  </optgroup>
-                </select>
                 <div style={{ fontSize: 10, color: '#6b7280', marginTop: 4 }}>語音 AI 角色設定（留空使用預設）</div>
                 <textarea
                   value={voicePrompt}
@@ -741,7 +764,7 @@ export default function VoiceHub() {
                   onClick={saveVoicePrompt}
                   disabled={voiceSettingsSaving}
                   style={{ padding: '5px 0', borderRadius: 6, fontSize: 11, fontWeight: 600, background: 'rgba(59,130,246,0.15)', border: '1px solid rgba(59,130,246,0.3)', color: '#60a5fa', cursor: voiceSettingsSaving ? 'wait' : 'pointer', width: '100%' }}>
-                  {voiceSettingsSaving ? '儲存中…' : '儲存設定'}
+                  {voiceSettingsSaving ? '儲存中…' : '儲存 Prompt'}
                 </button>
                 <div style={{ fontSize: 10, color: '#6b7280', marginTop: 4 }}>產品知識庫（PDF / TXT / MD）</div>
                 {voiceKbName && (
