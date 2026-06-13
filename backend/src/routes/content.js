@@ -3,6 +3,7 @@ const path = require('path');
 const fs = require('fs');
 const router = express.Router();
 const { callAI } = require('../aiRouter');
+const { getGlobalKBText } = require('./global-kb');
 const { generateImage, generateVideo, generateMusic } = require('../services/mediaRouter');
 const { run, get, all } = require('../db');
 
@@ -49,6 +50,8 @@ router.post('/generate', async (req, res) => {
     let systemPrompt = SYSTEM_PROMPTS[type];
     if (platform) systemPrompt += ` 目標平台：${platform}。`;
     systemPrompt += ` ${LANGUAGE_INSTRUCTIONS[language] || LANGUAGE_INSTRUCTIONS['zh-TW']}`;
+    const globalKB = await getGlobalKBText();
+    if (globalKB) systemPrompt += `\n\n${globalKB}`;
 
     const result = await callAI(prompt, systemPrompt, {
       model: 'glm-5-turbo',

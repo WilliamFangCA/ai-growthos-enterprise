@@ -43,6 +43,13 @@ const AVAILABLE_MODELS = [
     description: '高質量推理，適合複雜 Agent 任務',
   },
   {
+    id: 'claude-opus-4-8',
+    label: 'Claude Opus 4.8',
+    provider: 'Claude',
+    badge: '最強',
+    description: '最高智能 Claude，適合深度推理任務',
+  },
+  {
     id: 'MiniMax-M3',
     label: 'MiniMax M3',
     provider: 'MiniMax',
@@ -116,6 +123,109 @@ const AVAILABLE_MODELS = [
     label: 'Laguna M.1',
     provider: 'OpenRouter',
     description: 'Poolside 代碼專精模型，免費',
+  },
+  // OpenAI
+  {
+    id: 'gpt-4o',
+    label: 'GPT-4o',
+    provider: 'OpenAI',
+    badge: '強力',
+    description: 'OpenAI 旗艦模型，高質量多模態推理',
+  },
+  {
+    id: 'gpt-4o-mini',
+    label: 'GPT-4o Mini',
+    provider: 'OpenAI',
+    badge: '快速',
+    description: '輕量快速，適合高頻內容生成',
+  },
+  {
+    id: 'o3-mini',
+    label: 'OpenAI o3-mini',
+    provider: 'OpenAI',
+    badge: '推理',
+    description: '深度推理模型，適合複雜邏輯任務',
+  },
+  // Gemini
+  {
+    id: 'gemini-2.0-flash',
+    label: 'Gemini 2.0 Flash',
+    provider: 'Gemini',
+    badge: '快速',
+    description: 'Google 最新高速模型，低延遲',
+  },
+  {
+    id: 'gemini-1.5-pro',
+    label: 'Gemini 1.5 Pro',
+    provider: 'Gemini',
+    badge: '強力',
+    description: '超長上下文，適合文件分析任務',
+  },
+  // Qwen / Alibaba
+  {
+    id: 'qwen-turbo',
+    label: 'Qwen Turbo',
+    provider: 'Qwen',
+    badge: '快速',
+    description: '阿里雲高速模型，中文優化',
+  },
+  {
+    id: 'qwen-plus',
+    label: 'Qwen Plus',
+    provider: 'Qwen',
+    badge: '推薦',
+    description: '均衡能力，適合商業內容生成',
+  },
+  {
+    id: 'qwen-max',
+    label: 'Qwen Max',
+    provider: 'Qwen',
+    badge: '最強',
+    description: '阿里雲最強模型，頂級中文理解',
+  },
+  {
+    id: 'qwen3-235b-a22b',
+    label: 'Qwen3 235B',
+    provider: 'Qwen',
+    badge: '最強',
+    description: 'Qwen3 旗艦 MoE，頂級推理能力',
+  },
+  // NVIDIA NIM
+  {
+    id: 'nvidia/llama-3.3-nemotron-super-49b-v1',
+    label: 'Nemotron Super 49B',
+    provider: 'NVIDIA',
+    badge: '推薦',
+    description: 'NVIDIA 最佳推理效率模型',
+  },
+  {
+    id: 'nvidia/llama-3.1-nemotron-70b-instruct',
+    label: 'Nemotron 70B',
+    provider: 'NVIDIA',
+    badge: '強力',
+    description: 'NVIDIA 70B 指令調優模型',
+  },
+  {
+    id: 'meta/llama-3.3-70b-instruct',
+    label: 'Llama 3.3 70B',
+    provider: 'NVIDIA',
+    badge: '快速',
+    description: 'Meta Llama 3.3，NVIDIA 加速部署',
+  },
+  // Doubao / Volcano Engine
+  {
+    id: 'doubao-1.5-pro-32k',
+    label: 'Doubao 1.5 Pro',
+    provider: 'Doubao',
+    badge: '推薦',
+    description: '字節跳動旗艦模型，中文專精',
+  },
+  {
+    id: 'doubao-lite-32k',
+    label: 'Doubao Lite',
+    provider: 'Doubao',
+    badge: '快速',
+    description: '輕量高速，適合日常中文任務',
   },
   {
     id: 'ollama/llama3.2',

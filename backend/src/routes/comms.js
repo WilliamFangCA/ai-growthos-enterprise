@@ -4,6 +4,7 @@ const { run, get, all, getDb } = require('../db');
 const db = { transaction: (fn) => getDb().transaction(fn) };
 const { callAI } = require('../aiRouter');
 const { readKnowledgeBase } = require('./hub-settings');
+const { getGlobalKBText } = require('./global-kb');
 
 // GET /api/comms/accounts
 router.get('/accounts', (req, res) => {
@@ -86,9 +87,11 @@ router.post('/messages/ai-reply', async (req, res) => {
     const prompt = `Conversation history:\n${history}\n\nPlease write a helpful, professional reply to the customer's latest message. Be concise and friendly. Respond in the same language as the customer.`;
     const hubConfig = get('SELECT * FROM hub_configs WHERE hub_type = ?', ['comms']) || {};
     const knowledgeText = await readKnowledgeBase(hubConfig.knowledge_base_path || '');
+    const globalKB = await getGlobalKBText();
     const systemPrompt = [
       hubConfig.system_prompt || 'You are a professional customer service AI for AI GrowthOS Enterprise. You help customers with inquiries, orders, and product information. Always be helpful, empathetic, and solution-oriented.',
       knowledgeText ? `\n\n【產品知識庫 / Product Knowledge】\n${knowledgeText}` : '',
+      globalKB ? `\n\n${globalKB}` : '',
     ].join('');
 
     const result = await callAI(prompt, systemPrompt, { model: hubConfig.ai_model || model || 'glm-5-turbo', maxTokens: 500, temperature: temperature || 0.7 });
@@ -187,9 +190,11 @@ async function runAIRulesEngine(conversationId, platform, inboundMessage) {
 
     const hubCfg = get('SELECT * FROM hub_configs WHERE hub_type = ?', ['comms']) || {};
     const kbText = await readKnowledgeBase(hubCfg.knowledge_base_path || '');
+    const globalKB2 = await getGlobalKBText();
     const systemPrompt = [
       hubCfg.system_prompt || '你是一個專業 AI 客服，代表品牌回覆客戶。回覆要簡短親切，使用與客戶相同的語言。',
       kbText ? `\n\n【產品知識庫】\n${kbText}` : '',
+      globalKB2 ? `\n\n${globalKB2}` : '',
     ].join('');
 
     const aiResult = await callAI(
