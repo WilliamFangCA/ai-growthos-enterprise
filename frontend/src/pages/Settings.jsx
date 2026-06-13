@@ -941,7 +941,7 @@ function AccountCard({ account, colors, onChange, onDelete, platforms = MESSAGIN
                 background: colors.card,
                 border: `1px solid ${colors.border}`,
                 borderRadius: 10,
-                minWidth: 200, width: 220,
+                minWidth: 200, width: 240,
                 boxShadow: '0 8px 24px rgba(0,0,0,0.3)',
                 display: 'flex', flexDirection: 'column',
               }}>
