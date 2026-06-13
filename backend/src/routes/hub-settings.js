@@ -25,14 +25,15 @@ router.get('/:hubType', (req, res) => {
   }
 });
 
-// POST /api/hub-settings/:hubType — save system prompt
+// POST /api/hub-settings/:hubType — save system prompt + ai model
 router.post('/:hubType', (req, res) => {
   try {
-    const { system_prompt } = req.body;
+    const { system_prompt, ai_model } = req.body;
     run(
-      `INSERT INTO hub_configs (hub_type, system_prompt) VALUES (?, ?)
-       ON CONFLICT(hub_type) DO UPDATE SET system_prompt = excluded.system_prompt, updated_at = CURRENT_TIMESTAMP`,
-      [req.params.hubType, system_prompt || '']
+      `INSERT INTO hub_configs (hub_type, system_prompt, ai_model) VALUES (?, ?, ?)
+       ON CONFLICT(hub_type) DO UPDATE SET system_prompt = excluded.system_prompt,
+       ai_model = excluded.ai_model, updated_at = CURRENT_TIMESTAMP`,
+      [req.params.hubType, system_prompt || '', ai_model || '']
     );
     triggerCacheInvalidation(req.params.hubType);
     res.json({ success: true });

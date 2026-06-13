@@ -91,7 +91,7 @@ router.post('/messages/ai-reply', async (req, res) => {
       knowledgeText ? `\n\n【產品知識庫 / Product Knowledge】\n${knowledgeText}` : '',
     ].join('');
 
-    const result = await callAI(prompt, systemPrompt, { model: model || 'glm-5-turbo', maxTokens: 500, temperature: temperature || 0.7 });
+    const result = await callAI(prompt, systemPrompt, { model: hubConfig.ai_model || model || 'glm-5-turbo', maxTokens: 500, temperature: temperature || 0.7 });
 
     run('INSERT INTO messages (conversation_id, direction, content, sent_by, ai_node_type, quality_score) VALUES (?,?,?,?,?,?)',
       [conversation_id, 'outbound', result.content, 'ai', 'service', 4.5]);
@@ -195,7 +195,7 @@ async function runAIRulesEngine(conversationId, platform, inboundMessage) {
     const aiResult = await callAI(
       `客戶訊息：${inboundMessage}\n\n請根據以下回覆範本生成最終回覆：${prompt}`,
       systemPrompt,
-      { model: 'glm-5-turbo', maxTokens: 300 }
+      { model: hubCfg.ai_model || 'glm-5-turbo', maxTokens: 300 }
     );
 
     const aiReply = aiResult.content;

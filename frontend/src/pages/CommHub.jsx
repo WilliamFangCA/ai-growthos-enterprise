@@ -62,6 +62,7 @@ export default function CommHub() {
   const [refreshing, setRefreshing] = useState(false);
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [hubPrompt, setHubPrompt] = useState('');
+  const [hubAiModel, setHubAiModel] = useState('');
   const [hubKbName, setHubKbName] = useState('');
   const [hubKbFile, setHubKbFile] = useState(null);
   const [hubSaving, setHubSaving] = useState(false);
@@ -89,6 +90,7 @@ export default function CommHub() {
       if (r.ok) {
         const d = await r.json();
         setHubPrompt(d.system_prompt || '');
+        setHubAiModel(d.ai_model || '');
         setHubKbName(d.knowledge_base_name || '');
       }
     } catch {}
@@ -101,7 +103,7 @@ export default function CommHub() {
       const r = await apiFetch('/api/hub-settings/comms', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ system_prompt: hubPrompt }),
+        body: JSON.stringify({ system_prompt: hubPrompt, ai_model: hubAiModel }),
       });
       setHubSettingsMsg(r.ok ? { type: 'ok', text: '✓ Prompt 已儲存' } : { type: 'err', text: '儲存失敗' });
     } catch { setHubSettingsMsg({ type: 'err', text: '儲存失敗' }); }
@@ -677,6 +679,42 @@ export default function CommHub() {
 
           <div className="space-y-6">
             <div>
+              <label className="text-sm font-medium text-gray-700 mb-2 block">AI 模型</label>
+              <p className="text-xs text-gray-400 mb-2">選擇通訊中台使用的 AI 模型。留空則使用系統預設（GLM-5 Turbo）。</p>
+              <select
+                value={hubAiModel}
+                onChange={e => setHubAiModel(e.target.value)}
+                className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300 bg-white">
+                <option value="">自動（系統預設 glm-5-turbo）</option>
+                <optgroup label="豆包 Doubao (Volcano Engine)">
+                  <option value="doubao-lite-32k">豆包 Lite 32K</option>
+                  <option value="doubao-pro-32k">豆包 Pro 32K</option>
+                </optgroup>
+                <optgroup label="GLM (智譜 ZhipuAI)">
+                  <option value="glm-5-turbo">GLM-5 Turbo</option>
+                  <option value="glm-5">GLM-5</option>
+                  <option value="glm-4.6">GLM-4.6</option>
+                </optgroup>
+                <optgroup label="通義千問 Qwen (Alibaba)">
+                  <option value="qwen-turbo">Qwen Turbo</option>
+                  <option value="qwen-plus">Qwen Plus</option>
+                  <option value="qwen-max">Qwen Max</option>
+                </optgroup>
+                <optgroup label="OpenAI">
+                  <option value="gpt-4o-mini">GPT-4o Mini</option>
+                  <option value="gpt-4o">GPT-4o</option>
+                </optgroup>
+                <optgroup label="Google Gemini">
+                  <option value="gemini-2.0-flash">Gemini 2.0 Flash</option>
+                  <option value="gemini-1.5-pro">Gemini 1.5 Pro</option>
+                </optgroup>
+                <optgroup label="MiniMax">
+                  <option value="MiniMax-M3">MiniMax M3</option>
+                </optgroup>
+              </select>
+            </div>
+
+            <div className="border-t border-gray-100 pt-6">
               <label className="text-sm font-medium text-gray-700 mb-2 block">AI 系統 Prompt</label>
               <p className="text-xs text-gray-400 mb-2">AI 的角色設定、回覆風格、品牌語調等。留空則使用預設客服設定。</p>
               <textarea
@@ -690,7 +728,7 @@ export default function CommHub() {
                 onClick={saveHubPrompt}
                 disabled={hubSaving}
                 className="mt-2 px-4 py-2 bg-blue-600 text-white rounded-xl text-sm font-medium hover:bg-blue-700 transition-colors disabled:opacity-50">
-                {hubSaving ? '儲存中…' : '儲存 Prompt'}
+                {hubSaving ? '儲存中…' : '儲存設定'}
               </button>
             </div>
 

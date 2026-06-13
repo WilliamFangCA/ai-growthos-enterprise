@@ -323,6 +323,7 @@ function initTables() {
   try { exec(`ALTER TABLE campaigns ADD COLUMN next_run_at DATETIME`); } catch (_) {}
   try { exec(`ALTER TABLE ai_reply_rules ADD COLUMN campaign_id INTEGER`); } catch (_) {}
   try { exec(`CREATE INDEX IF NOT EXISTS idx_messages_convo ON messages(conversation_id, sent_at)`); } catch (_) {}
+  try { exec(`ALTER TABLE hub_configs ADD COLUMN ai_model TEXT DEFAULT ''`); } catch (_) {}
 }
 
 function seedDemoData() {

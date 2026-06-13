@@ -141,6 +141,7 @@ export default function VoiceHub() {
   const cloneFileRef = useRef(null);
   // AI 設定
   const [voicePrompt, setVoicePrompt] = useState('');
+  const [voiceAiModel, setVoiceAiModel] = useState('');
   const [voiceKbName, setVoiceKbName] = useState('');
   const [voiceKbFile, setVoiceKbFile] = useState(null);
   const [voiceSettingsSaving, setVoiceSettingsSaving] = useState(false);
@@ -194,7 +195,7 @@ export default function VoiceHub() {
   function loadVoiceSettings() {
     apiFetch('/api/hub-settings/voice')
       .then(r => r.json())
-      .then(d => { setVoicePrompt(d.system_prompt || ''); setVoiceKbName(d.knowledge_base_name || ''); })
+      .then(d => { setVoicePrompt(d.system_prompt || ''); setVoiceAiModel(d.ai_model || ''); setVoiceKbName(d.knowledge_base_name || ''); })
       .catch(() => {});
   }
 
@@ -205,7 +206,7 @@ export default function VoiceHub() {
       const r = await apiFetch('/api/hub-settings/voice', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ system_prompt: voicePrompt }),
+        body: JSON.stringify({ system_prompt: voicePrompt, ai_model: voiceAiModel }),
       });
       setVoiceSettingsMsg(r.ok ? { ok: true, text: '✓ Prompt 已儲存' } : { ok: false, text: '儲存失敗' });
     } catch { setVoiceSettingsMsg({ ok: false, text: '儲存失敗' }); }
@@ -696,7 +697,39 @@ export default function VoiceHub() {
                     {voiceSettingsMsg.text}
                   </div>
                 )}
-                <div style={{ fontSize: 10, color: '#6b7280' }}>語音 AI 角色設定（留空使用預設）</div>
+                <div style={{ fontSize: 10, color: '#6b7280' }}>AI 模型（留空使用預設 glm-5-turbo）</div>
+                <select
+                  value={voiceAiModel}
+                  onChange={e => setVoiceAiModel(e.target.value)}
+                  style={{ width: '100%', background: '#0f1117', border: '1px solid #2a2d3e', borderRadius: 6, padding: '6px 8px', color: '#f9fafb', fontSize: 11, outline: 'none', boxSizing: 'border-box' }}>
+                  <option value="">自動（系統預設 glm-5-turbo）</option>
+                  <optgroup label="豆包 Doubao (Volcano Engine)">
+                    <option value="doubao-lite-32k">豆包 Lite 32K</option>
+                    <option value="doubao-pro-32k">豆包 Pro 32K</option>
+                  </optgroup>
+                  <optgroup label="GLM (智譜 ZhipuAI)">
+                    <option value="glm-5-turbo">GLM-5 Turbo</option>
+                    <option value="glm-5">GLM-5</option>
+                    <option value="glm-4.6">GLM-4.6</option>
+                  </optgroup>
+                  <optgroup label="通義千問 Qwen (Alibaba)">
+                    <option value="qwen-turbo">Qwen Turbo</option>
+                    <option value="qwen-plus">Qwen Plus</option>
+                    <option value="qwen-max">Qwen Max</option>
+                  </optgroup>
+                  <optgroup label="OpenAI">
+                    <option value="gpt-4o-mini">GPT-4o Mini</option>
+                    <option value="gpt-4o">GPT-4o</option>
+                  </optgroup>
+                  <optgroup label="Google Gemini">
+                    <option value="gemini-2.0-flash">Gemini 2.0 Flash</option>
+                    <option value="gemini-1.5-pro">Gemini 1.5 Pro</option>
+                  </optgroup>
+                  <optgroup label="MiniMax">
+                    <option value="MiniMax-M3">MiniMax M3</option>
+                  </optgroup>
+                </select>
+                <div style={{ fontSize: 10, color: '#6b7280', marginTop: 4 }}>語音 AI 角色設定（留空使用預設）</div>
                 <textarea
                   value={voicePrompt}
                   onChange={e => setVoicePrompt(e.target.value)}
@@ -708,7 +741,7 @@ export default function VoiceHub() {
                   onClick={saveVoicePrompt}
                   disabled={voiceSettingsSaving}
                   style={{ padding: '5px 0', borderRadius: 6, fontSize: 11, fontWeight: 600, background: 'rgba(59,130,246,0.15)', border: '1px solid rgba(59,130,246,0.3)', color: '#60a5fa', cursor: voiceSettingsSaving ? 'wait' : 'pointer', width: '100%' }}>
-                  {voiceSettingsSaving ? '儲存中…' : '儲存 Prompt'}
+                  {voiceSettingsSaving ? '儲存中…' : '儲存設定'}
                 </button>
                 <div style={{ fontSize: 10, color: '#6b7280', marginTop: 4 }}>產品知識庫（PDF / TXT / MD）</div>
                 {voiceKbName && (

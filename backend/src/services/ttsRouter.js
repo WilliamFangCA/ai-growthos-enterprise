@@ -202,6 +202,20 @@ const VOICES = [
     cosyvoiceId: 'longcheng_v2',
     name: { 'zh-TW': '龍誠（誠懇）', 'zh-CN': '龙诚（诚恳）', en: 'Longcheng (Sincere)' } },
 
+  // ── Volcano Engine ARK TTS（豆包語音，中文優化）─────────────────────────────
+  { id: 'volcano-zh-female-sweet', provider: 'volcano', gender: 'female', category: 'volcano',
+    volcanoVoice: 'zh_female_tianmei_moon_bigtts',
+    name: { 'zh-TW': '豆包甜美女聲', 'zh-CN': '豆包甜美女声', en: 'Doubao Sweet Female' } },
+  { id: 'volcano-zh-male-pro',     provider: 'volcano', gender: 'male',   category: 'volcano',
+    volcanoVoice: 'zh_male_jingying_moon_bigtts',
+    name: { 'zh-TW': '豆包精英男聲', 'zh-CN': '豆包精英男声', en: 'Doubao Pro Male' } },
+  { id: 'volcano-zh-female-calm',  provider: 'volcano', gender: 'female', category: 'volcano',
+    volcanoVoice: 'zh_female_wanwanwan_moon_bigtts',
+    name: { 'zh-TW': '豆包沉穩女聲', 'zh-CN': '豆包沉稳女声', en: 'Doubao Calm Female' } },
+  { id: 'volcano-en-female',       provider: 'volcano', gender: 'female', category: 'volcano',
+    volcanoVoice: 'en_female_sarah_moon_bigtts',
+    name: { 'zh-TW': '豆包英文女聲', 'zh-CN': '豆包英文女声', en: 'Doubao English Female' } },
+
   // ── ChatTTS（本地自架，對話自然）────────────────────────────────────────
   { id: 'chatts-female', provider: 'chatts', gender: 'female', category: 'chatts',
     chattsSpkId: null,
@@ -296,6 +310,40 @@ async function synthesizeMiniMax(text, voiceId, speed) {
     return buffer.length > 100 ? buffer : null;
   } catch (e) {
     console.warn('[ttsRouter] MiniMax TTS failed:', e.message);
+    return null;
+  }
+}
+
+// ── Volcano Engine ARK TTS ────────────────────────────────────────────────────
+async function synthesizeVolcano(text, voice) {
+  const apiKey = process.env.VOLCANO_API_KEY;
+  if (!apiKey || !text) return null;
+
+  try {
+    const res = await fetch('https://ark.cn-beijing.volces.com/api/v3/audio/speech', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify({
+        model: 'doubao-tts',
+        input: text.slice(0, 4096),
+        voice: voice.volcanoVoice || 'zh_female_tianmei_moon_bigtts',
+        response_format: 'mp3',
+      }),
+      signal: AbortSignal.timeout(30000),
+    });
+
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      console.warn('[ttsRouter] Volcano TTS error:', err.error?.message || res.status);
+      return null;
+    }
+    const buf = Buffer.from(await res.arrayBuffer());
+    return buf.length > 100 ? buf : null;
+  } catch (e) {
+    console.warn('[ttsRouter] Volcano TTS failed:', e.message);
     return null;
   }
 }
@@ -417,6 +465,7 @@ async function synthesizeSpeech(text, { voiceId, speed } = {}) {
   const voice = getVoice(resolvedId);
 
   if (voice.provider === 'openai')     return synthesizeOpenAI(text, voice);
+  if (voice.provider === 'volcano')    return synthesizeVolcano(text, voice);
   if (voice.provider === 'cosyvoice')  return synthesizeCosyVoice(text, voice);
   if (voice.provider === 'chatts')     return synthesizeChatTTS(text);
   if (voice.provider === 'xtts')       return synthesizeXTTS(text, voice);

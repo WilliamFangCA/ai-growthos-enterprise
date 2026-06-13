@@ -26,6 +26,7 @@ async function getVoiceHubConfig() {
   _voiceHubCache = {
     systemPromptBase: hubConfig.system_prompt || '',
     knowledgeText: knowledgeText.slice(0, 2000),
+    aiModel: hubConfig.ai_model || '',
   };
   _voiceHubCacheTs = now;
   return _voiceHubCache;
@@ -134,7 +135,7 @@ router.post('/call/:id/turn', async (req, res) => {
       .map(m => `${m.direction === 'inbound' ? '客戶' : 'AI'}：${m.content}`)
       .join('\n');
 
-    const { systemPromptBase, knowledgeText } = await getVoiceHubConfig();
+    const { systemPromptBase, knowledgeText, aiModel } = await getVoiceHubConfig();
     const baseRules =
       '回覆規則：1) 像真人講電話一樣自然口語，簡短扼要（最多 80 字）；' +
       '2) 絕對不要使用 markdown、條列符號、emoji 或特殊符號（回覆會被轉成語音唸出來）；' +
@@ -153,7 +154,7 @@ router.post('/call/:id/turn', async (req, res) => {
         callAI(
           `通話逐字稿：\n${historyText}\n\n請以語音客服身分回覆客戶最後一句話。`,
           systemPrompt,
-          { model: 'glm-5-turbo', maxTokens: 120, language }
+          { model: aiModel || 'glm-5-turbo', maxTokens: 120, language }
         ),
         new Promise((_, rej) => setTimeout(() => rej(new Error('ai_timeout')), 6000)),
       ]);
