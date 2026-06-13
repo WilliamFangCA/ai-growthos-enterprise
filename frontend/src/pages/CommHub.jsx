@@ -686,6 +686,12 @@ export default function CommHub() {
                 onChange={e => setHubAiModel(e.target.value)}
                 className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300 bg-white">
                 <option value="">自動（系統預設 glm-5-turbo）</option>
+                <optgroup label="NVIDIA NIM">
+                  <option value="nvidia/llama-3.3-nemotron-super-49b-v1">Llama 3.3 Nemotron 49B</option>
+                  <option value="nvidia/llama-3.1-nemotron-70b-instruct">Llama 3.1 Nemotron 70B</option>
+                  <option value="meta/llama-3.3-70b-instruct">Meta Llama 3.3 70B</option>
+                  <option value="deepseek-ai/deepseek-r1">DeepSeek R1 (NVIDIA)</option>
+                </optgroup>
                 <optgroup label="豆包 Doubao (Volcano Engine)">
                   <option value="doubao-lite-32k">豆包 Lite 32K</option>
                   <option value="doubao-pro-32k">豆包 Pro 32K</option>

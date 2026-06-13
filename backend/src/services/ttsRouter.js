@@ -216,6 +216,17 @@ const VOICES = [
     volcanoVoice: 'en_female_sarah_moon_bigtts',
     name: { 'zh-TW': '豆包英文女聲', 'zh-CN': '豆包英文女声', en: 'Doubao English Female' } },
 
+  // ── NVIDIA Riva TTS（英文優化，多語言）──────────────────────────────────
+  { id: 'nvidia-en-female-1', provider: 'nvidia', gender: 'female', category: 'nvidia',
+    nvidiaVoice: 'English-US.Female-1',
+    name: { 'zh-TW': 'NVIDIA 英文女聲 1', 'zh-CN': 'NVIDIA 英文女声 1', en: 'NVIDIA English Female 1' } },
+  { id: 'nvidia-en-male-1',   provider: 'nvidia', gender: 'male',   category: 'nvidia',
+    nvidiaVoice: 'English-US.Male-1',
+    name: { 'zh-TW': 'NVIDIA 英文男聲 1', 'zh-CN': 'NVIDIA 英文男声 1', en: 'NVIDIA English Male 1' } },
+  { id: 'nvidia-en-female-2', provider: 'nvidia', gender: 'female', category: 'nvidia',
+    nvidiaVoice: 'English-US.Female-2',
+    name: { 'zh-TW': 'NVIDIA 英文女聲 2', 'zh-CN': 'NVIDIA 英文女声 2', en: 'NVIDIA English Female 2' } },
+
   // ── ChatTTS（本地自架，對話自然）────────────────────────────────────────
   { id: 'chatts-female', provider: 'chatts', gender: 'female', category: 'chatts',
     chattsSpkId: null,
@@ -348,6 +359,40 @@ async function synthesizeVolcano(text, voice) {
   }
 }
 
+// ── NVIDIA Riva TTS ───────────────────────────────────────────────────────────
+async function synthesizeNVIDIA(text, voice) {
+  const apiKey = process.env.NVIDIA_API_KEY;
+  if (!apiKey || !text) return null;
+
+  try {
+    const res = await fetch('https://integrate.api.nvidia.com/v1/audio/speech', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify({
+        model: 'magpie-tts-multilingual',
+        input: text.slice(0, 4096),
+        voice: voice.nvidiaVoice || 'English-US.Female-1',
+        response_format: 'mp3',
+      }),
+      signal: AbortSignal.timeout(30000),
+    });
+
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      console.warn('[ttsRouter] NVIDIA TTS error:', err.detail || err.error?.message || res.status);
+      return null;
+    }
+    const buf = Buffer.from(await res.arrayBuffer());
+    return buf.length > 100 ? buf : null;
+  } catch (e) {
+    console.warn('[ttsRouter] NVIDIA TTS failed:', e.message);
+    return null;
+  }
+}
+
 // ── CosyVoice TTS（Alibaba DashScope）────────────────────────────────────────
 async function synthesizeCosyVoice(text, voice) {
   const apiKey = process.env.DASHSCOPE_API_KEY;
@@ -465,6 +510,7 @@ async function synthesizeSpeech(text, { voiceId, speed } = {}) {
   const voice = getVoice(resolvedId);
 
   if (voice.provider === 'openai')     return synthesizeOpenAI(text, voice);
+  if (voice.provider === 'nvidia')     return synthesizeNVIDIA(text, voice);
   if (voice.provider === 'volcano')    return synthesizeVolcano(text, voice);
   if (voice.provider === 'cosyvoice')  return synthesizeCosyVoice(text, voice);
   if (voice.provider === 'chatts')     return synthesizeChatTTS(text);

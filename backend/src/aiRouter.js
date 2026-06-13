@@ -233,6 +233,16 @@ const GEMINI_MODELS = new Set([
   'gemini-2.5-flash-preview-04-17',
 ]);
 
+// NVIDIA NIM (OpenAI-compatible endpoint)
+const NVIDIA_MODELS = new Set([
+  'nvidia/llama-3.3-nemotron-super-49b-v1',
+  'nvidia/llama-3.1-nemotron-70b-instruct',
+  'meta/llama-3.3-70b-instruct',
+  'meta/llama-3.1-405b-instruct',
+  'deepseek-ai/deepseek-r1',
+  'mistralai/mistral-7b-instruct-v0.3',
+]);
+
 // Volcano Engine ARK (Doubao via OpenAI-compatible endpoint)
 const VOLCANO_MODELS = new Set([
   'doubao-pro-32k',
@@ -261,9 +271,11 @@ const ALIBABA_MODELS = new Set([
 
 // 預設 fallback 優先順序：主模型失敗時依序嘗試
 const FALLBACK_CHAIN = [
-  { model: 'glm-5-turbo',                          provider: 'glm'        },
-  { model: 'doubao-lite-32k',                      provider: 'volcano'    },
-  { model: 'doubao-pro-32k',                       provider: 'volcano'    },
+  { model: 'glm-5-turbo',                                  provider: 'glm'     },
+  { model: 'doubao-lite-32k',                              provider: 'volcano' },
+  { model: 'doubao-pro-32k',                               provider: 'volcano' },
+  { model: 'nvidia/llama-3.3-nemotron-super-49b-v1',       provider: 'nvidia'  },
+  { model: 'nvidia/llama-3.1-nemotron-70b-instruct',       provider: 'nvidia'  },
   { model: 'qwen-turbo',                           provider: 'alibaba'    },
   { model: 'qwen-plus',                            provider: 'alibaba'    },
   { model: 'gpt-4o-mini',                          provider: 'openai'     },
@@ -570,6 +582,49 @@ async function callAlibaba(prompt, systemPrompt, model, maxTokens, temperature) 
   }
 }
 
+// NVIDIA NIM — OpenAI-compatible endpoint
+async function callNVIDIA(prompt, systemPrompt, model, maxTokens, temperature) {
+  const apiKey = process.env.NVIDIA_API_KEY;
+  const baseUrl = 'https://integrate.api.nvidia.com/v1';
+  if (!apiKey) return null;
+
+  const nvidiaModel = NVIDIA_MODELS.has(model) ? model : 'nvidia/llama-3.3-nemotron-super-49b-v1';
+
+  try {
+    const response = await fetch(`${baseUrl}/chat/completions`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify({
+        model: nvidiaModel,
+        max_tokens: maxTokens,
+        temperature,
+        stream: false,
+        messages: [
+          ...(systemPrompt ? [{ role: 'system', content: systemPrompt }] : []),
+          { role: 'user', content: prompt },
+        ],
+      }),
+      signal: AbortSignal.timeout(30000),
+    });
+
+    const data = await response.json();
+    if (!response.ok) {
+      console.warn('[aiRouter] NVIDIA error:', data.detail || data.error?.message || response.status);
+      return null;
+    }
+
+    const content = data.choices?.[0]?.message?.content || '';
+    const tokensUsed = (data.usage?.prompt_tokens || 0) + (data.usage?.completion_tokens || 0);
+    return { content, model: nvidiaModel, tokensUsed, source: 'nvidia' };
+  } catch (e) {
+    console.warn('[aiRouter] NVIDIA failed:', e.message);
+    return null;
+  }
+}
+
 // Volcano Engine ARK — OpenAI-compatible endpoint
 async function callVolcano(prompt, systemPrompt, model, maxTokens, temperature) {
   const apiKey = process.env.VOLCANO_API_KEY;
@@ -620,6 +675,7 @@ function getProvider(model) {
   if (GEMINI_MODELS.has(model) || model.startsWith('gemini-')) return 'gemini';
   if (ALIBABA_MODELS.has(model) || model.startsWith('qwen')) return 'alibaba';
   if (VOLCANO_MODELS.has(model) || model.startsWith('doubao-')) return 'volcano';
+  if (NVIDIA_MODELS.has(model))                                  return 'nvidia';
   if (OPENROUTER_MODELS.has(model) || model.includes('/'))       return 'openrouter';
   return 'glm';
 }
@@ -636,6 +692,7 @@ async function dispatchModel(prompt, systemPrompt, model, maxTokens, temperature
     case 'gemini':     return callGemini(prompt, systemPrompt, model, maxTokens, temperature);
     case 'alibaba':    return callAlibaba(prompt, systemPrompt, model, maxTokens, temperature);
     case 'volcano':    return callVolcano(prompt, systemPrompt, model, maxTokens, temperature);
+    case 'nvidia':     return callNVIDIA(prompt, systemPrompt, model, maxTokens, temperature);
     default:           return null;
   }
 }

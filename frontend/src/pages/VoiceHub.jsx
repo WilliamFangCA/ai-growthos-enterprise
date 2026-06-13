@@ -48,6 +48,7 @@ const PROVIDER_BADGE = {
   xtts:      { label: 'XTTS',      color: '#3b82f6' },
   cloned:    { label: '我的聲音',   color: '#14b8a6' },
   volcano:   { label: '豆包 ARK',  color: '#f97316' },
+  nvidia:    { label: 'NVIDIA',    color: '#76b900' },
 };
 
 function VoiceCard({ v, selected, inCall, previewing, language, t, onSelect, onPreview, onDelete }) {
@@ -619,6 +620,16 @@ export default function VoiceHub() {
               <VoiceCard key={v.id} v={v} selected={selectedVoice} inCall={inCall} previewing={previewing}
                 language={language} t={t} onSelect={setSelectedVoice} onPreview={previewVoice} />
             ))}
+            {/* NVIDIA Riva TTS */}
+            {voices.filter(v => v.category === 'nvidia').length > 0 && (
+              <div style={{ fontSize: 10, color: '#76b900', letterSpacing: '0.06em', padding: '10px 2px 2px', fontWeight: 600 }}>
+                🟢 NVIDIA Riva TTS
+              </div>
+            )}
+            {voices.filter(v => v.category === 'nvidia').map(v => (
+              <VoiceCard key={v.id} v={v} selected={selectedVoice} inCall={inCall} previewing={previewing}
+                language={language} t={t} onSelect={setSelectedVoice} onPreview={previewVoice} />
+            ))}
             {/* CosyVoice */}
             {voices.filter(v => v.category === 'cosyvoice').length > 0 && (
               <div style={{ fontSize: 10, color: '#f59e0b', letterSpacing: '0.06em', padding: '10px 2px 2px', fontWeight: 600 }}>
@@ -707,6 +718,12 @@ export default function VoiceHub() {
                 onChange={e => setVoiceAiModel(e.target.value)}
                 style={{ width: '100%', background: '#0f1117', border: '1px solid #2a2d3e', borderRadius: 6, padding: '6px 8px', color: '#f9fafb', fontSize: 11, outline: 'none', boxSizing: 'border-box' }}>
                 <option value="">自動（系統預設 glm-5-turbo）</option>
+                <optgroup label="NVIDIA NIM">
+                  <option value="nvidia/llama-3.3-nemotron-super-49b-v1">Llama 3.3 Nemotron 49B</option>
+                  <option value="nvidia/llama-3.1-nemotron-70b-instruct">Llama 3.1 Nemotron 70B</option>
+                  <option value="meta/llama-3.3-70b-instruct">Meta Llama 3.3 70B</option>
+                  <option value="deepseek-ai/deepseek-r1">DeepSeek R1 (NVIDIA)</option>
+                </optgroup>
                 <optgroup label="豆包 Doubao (Volcano Engine)">
                   <option value="doubao-lite-32k">豆包 Lite 32K</option>
                   <option value="doubao-pro-32k">豆包 Pro 32K</option>
