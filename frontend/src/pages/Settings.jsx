@@ -841,6 +841,20 @@ function AccountCard({ account, colors, onChange, onDelete, platforms = MESSAGIN
   const [visible, setVisible] = useState(new Set());
   const [platformOpen, setPlatformOpen] = useState(false);
   const [platformSearch, setPlatformSearch] = useState('');
+  const [dropPos, setDropPos] = useState({ top: 0, left: 0 });
+  const btnRef = React.useRef(null);
+
+  // Close dropdown on any scroll or window resize
+  React.useEffect(() => {
+    if (!platformOpen) return;
+    const close = () => { setPlatformOpen(false); setPlatformSearch(''); };
+    window.addEventListener('scroll', close, true);
+    window.addEventListener('resize', close);
+    return () => {
+      window.removeEventListener('scroll', close, true);
+      window.removeEventListener('resize', close);
+    };
+  }, [platformOpen]);
 
   const platform = platforms.find(p => p.id === account.platform);
   const authDef = platform
@@ -899,7 +913,14 @@ function AccountCard({ account, colors, onChange, onDelete, platforms = MESSAGIN
         ) : (
           <div style={{ position: 'relative', flexShrink: 0 }}>
             <button
-              onClick={() => setPlatformOpen(o => !o)}
+              ref={btnRef}
+              onClick={() => {
+                if (!platformOpen && btnRef.current) {
+                  const r = btnRef.current.getBoundingClientRect();
+                  setDropPos({ top: r.bottom + 4, left: r.left });
+                }
+                setPlatformOpen(o => !o);
+              }}
               style={{
                 display: 'flex', alignItems: 'center', gap: 6,
                 padding: '6px 10px', borderRadius: 8,
@@ -916,10 +937,10 @@ function AccountCard({ account, colors, onChange, onDelete, platforms = MESSAGIN
             </button>
             {platformOpen && (
               <div style={{
-                position: 'absolute', top: '100%', left: 0, zIndex: 100,
+                position: 'fixed', top: dropPos.top, left: dropPos.left, zIndex: 9999,
                 background: colors.card,
                 border: `1px solid ${colors.border}`,
-                borderRadius: 10, marginTop: 4,
+                borderRadius: 10,
                 minWidth: 200, width: 220,
                 boxShadow: '0 8px 24px rgba(0,0,0,0.3)',
                 display: 'flex', flexDirection: 'column',
