@@ -845,22 +845,31 @@ function AccountCard({ account, colors, onChange, onDelete, platforms = MESSAGIN
   const btnRef = React.useRef(null);
   const dropRef = React.useRef(null);
 
-  // Close dropdown when the PAGE scrolls (so the fixed-position dropdown doesn't
-  // drift away from the button) or on resize — but NOT when the user scrolls
-  // inside the dropdown's own list.
+  // While open, keep the fixed-position dropdown glued to its button instead of
+  // closing on scroll. This avoids the dropdown disappearing when the wheel
+  // scrolls the page (e.g. hovering the non-scrollable search box).
   React.useEffect(() => {
     if (!platformOpen) return;
-    const onScroll = (e) => {
+    const reposition = () => {
+      if (btnRef.current) {
+        const r = btnRef.current.getBoundingClientRect();
+        setDropPos({ top: r.bottom + 4, left: r.left });
+      }
+    };
+    // Close when clicking outside both the trigger button and the dropdown.
+    const onPointerDown = (e) => {
       if (dropRef.current && dropRef.current.contains(e.target)) return;
+      if (btnRef.current && btnRef.current.contains(e.target)) return;
       setPlatformOpen(false);
       setPlatformSearch('');
     };
-    const onResize = () => { setPlatformOpen(false); setPlatformSearch(''); };
-    window.addEventListener('scroll', onScroll, true);
-    window.addEventListener('resize', onResize);
+    window.addEventListener('scroll', reposition, true);
+    window.addEventListener('resize', reposition);
+    window.addEventListener('mousedown', onPointerDown, true);
     return () => {
-      window.removeEventListener('scroll', onScroll, true);
-      window.removeEventListener('resize', onResize);
+      window.removeEventListener('scroll', reposition, true);
+      window.removeEventListener('resize', reposition);
+      window.removeEventListener('mousedown', onPointerDown, true);
     };
   }, [platformOpen]);
 
