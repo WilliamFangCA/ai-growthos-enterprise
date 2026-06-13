@@ -208,6 +208,12 @@ export default function AIRules() {
                   <div className="flex items-center gap-2 mb-1">
                     <span className="font-medium text-gray-800 text-sm">{rule.name}</span>
                     <TriggerBadge type={rule.trigger_type} />
+                    {rule.campaign_id && (
+                      <span className="text-xs px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700"
+                        title={rule.campaign_name ? `來源活動：${rule.campaign_name}` : '來源活動已重置'}>
+                        📣 {rule.campaign_name || '活動建立'}
+                      </span>
+                    )}
                     <span className="text-xs text-gray-400">v{rule.version}</span>
                   </div>
                   <p className="text-xs text-gray-500 line-clamp-2 mb-2">{rule.reply_template}</p>

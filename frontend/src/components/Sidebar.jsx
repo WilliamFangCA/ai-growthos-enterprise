@@ -18,8 +18,10 @@ const NAV_SECTIONS = [
     labelKey: 'growth',
     items: [
       { to: '/app/content',    labelKey: 'contentFactory', icon: '✍️' },
+      { to: '/app/toolbox',    labelKey: 'toolbox',        icon: '🧰' },
       { to: '/app/marketing',  labelKey: 'marketing',      icon: '🎯' },
       { to: '/app/comms',      labelKey: 'commHub',        icon: '💬', badgeKey: 'unread' },
+      { to: '/app/voice',      labelKey: 'voiceHub',       icon: '📞' },
       { to: '/app/ai-rules',   labelKey: 'aiAutoReply',    icon: '⚡' },
     ],
   },
@@ -28,6 +30,7 @@ const NAV_SECTIONS = [
     items: [
       { to: '/app/orders',     labelKey: 'orders',     icon: '📦', badgeKey: 'pendingOrders' },
       { to: '/app/crm',        labelKey: 'crm',        icon: '👥' },
+      { to: '/app/membership', labelKey: 'membership', icon: '👑' },
       { to: '/app/workflows',  labelKey: 'workflows',  icon: '🔄' },
     ],
   },

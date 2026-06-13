@@ -55,6 +55,9 @@ const ordersRouter = require('./routes/orders');
 const aiRulesRouter = require('./routes/ai-rules');
 const marketingRouter = require('./routes/marketing');
 const analyticsRouter = require('./routes/analytics');
+const membersRouter = require('./routes/members');
+const toolsRouter = require('./routes/tools');
+const voiceRouter = require('./routes/voice');
 
 // Dashboard and analytics are read-only stats — optionalAuth so the sidebar can poll without a token
 app.use('/api/dashboard', optionalAuth, dashboardRouter);
@@ -68,6 +71,14 @@ app.use('/api/comms', requireAuth, commsRouter);
 app.use('/api/orders', requireAuth, ordersRouter);
 app.use('/api/ai-rules', requireAuth, aiRulesRouter);
 app.use('/api/marketing', requireAuth, marketingRouter);
+app.use('/api/members', requireAuth, membersRouter);
+app.use('/api/tools', requireAuth, toolsRouter);
+app.use('/api/voice', requireAuth, voiceRouter);
+
+// 生成的媒體檔（圖片/影片/音樂）— 由 routes/content.js 寫入 backend/data/media
+const mediaDir = path.join(__dirname, '..', 'data', 'media');
+if (!fs.existsSync(mediaDir)) fs.mkdirSync(mediaDir, { recursive: true });
+app.use('/media', express.static(mediaDir, { maxAge: '7d' }));
 
 // Serve frontend build if dist exists (works in any NODE_ENV)
 const frontendBuild = path.join(__dirname, '..', '..', 'frontend', 'dist');
@@ -87,3 +98,28 @@ app.use((err, req, res, next) => {
 app.listen(PORT, () => {
   console.log(`[server] AI GrowthOS Backend running on http://localhost:${PORT}`);
 });
+
+// ── 行銷活動排程器：每 60 秒掃描到期的 scheduled 活動並執行（模擬發送） ──
+const { all: dbAll } = require('./db');
+const { executeCampaign } = require('./services/campaignEngine');
+const schedulerRunning = new Set();
+setInterval(async () => {
+  let due = [];
+  try {
+    due = dbAll(`SELECT id, name FROM campaigns
+                 WHERE status = 'active' AND trigger_type = 'scheduled'
+                   AND next_run_at IS NOT NULL AND next_run_at <= datetime('now')`);
+  } catch (_) { return; }
+  for (const c of due) {
+    if (schedulerRunning.has(c.id)) continue;
+    schedulerRunning.add(c.id);
+    try {
+      const result = await executeCampaign(c.id, 'scheduler');
+      console.log(`[scheduler] Campaign "${c.name}" executed: ${result.sent} sent (${result.aiGenerated} AI)`);
+    } catch (err) {
+      console.error(`[scheduler] Campaign ${c.id} failed:`, err.message);
+    } finally {
+      schedulerRunning.delete(c.id);
+    }
+  }
+}, 60_000);

@@ -71,6 +71,22 @@ function initTables() {
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP
     );
 
+    -- AI 媒體生成任務（圖片/影片/音樂）。持久日誌表：絕不可加入 seedDemoData 清空清單
+    CREATE TABLE IF NOT EXISTS media_jobs (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      kind TEXT NOT NULL,
+      prompt TEXT,
+      options_json TEXT DEFAULT '{}',
+      status TEXT DEFAULT 'pending',
+      result_url TEXT,
+      remote_url TEXT,
+      provider TEXT,
+      model TEXT,
+      error TEXT,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+
     CREATE TABLE IF NOT EXISTS agent_tasks (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       agent_name TEXT NOT NULL,
@@ -250,10 +266,44 @@ function initTables() {
       source TEXT DEFAULT 'system',
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP
     );
+
+    -- 活動執行日誌：欄位反正規化（campaigns 每次啟動重灌，日誌須自帶名稱才有意義）
+    -- 注意：此表「不可」加入 seedDemoData 的清空清單，它是模擬執行的持久記錄
+    CREATE TABLE IF NOT EXISTS campaign_executions (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      batch_id TEXT NOT NULL,
+      campaign_id INTEGER NOT NULL,
+      campaign_name TEXT,
+      contact_id INTEGER,
+      contact_name TEXT,
+      channel TEXT DEFAULT 'line',
+      message_content TEXT,
+      personalization TEXT DEFAULT 'template',
+      status TEXT DEFAULT 'simulated_sent',
+      executed_by TEXT DEFAULT 'manual',
+      executed_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+
+    -- 工作流逐步執行日誌（v2 圖形執行器；同樣不可被 seed 清空）
+    CREATE TABLE IF NOT EXISTS workflow_step_logs (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      run_id TEXT NOT NULL,
+      workflow_id INTEGER NOT NULL,
+      workflow_name TEXT,
+      node_id TEXT,
+      node_type TEXT,
+      status TEXT DEFAULT 'executed',
+      detail_json TEXT DEFAULT '{}',
+      executed_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
   `);
   // Migrations for existing DBs that predate these columns
   try { exec(`ALTER TABLE workflows ADD COLUMN category TEXT DEFAULT 'general'`); } catch (_) {}
   try { exec(`ALTER TABLE workflows ADD COLUMN description TEXT DEFAULT ''`); } catch (_) {}
+  try { exec(`ALTER TABLE campaigns ADD COLUMN audience_config TEXT DEFAULT '{}'`); } catch (_) {}
+  try { exec(`ALTER TABLE campaigns ADD COLUMN ai_config TEXT DEFAULT '{}'`); } catch (_) {}
+  try { exec(`ALTER TABLE campaigns ADD COLUMN next_run_at DATETIME`); } catch (_) {}
+  try { exec(`ALTER TABLE ai_reply_rules ADD COLUMN campaign_id INTEGER`); } catch (_) {}
 }
 
 function seedDemoData() {
@@ -435,16 +485,16 @@ function seedDemoData() {
   exec(`DELETE FROM content_history`);
   exec(`DELETE FROM sqlite_sequence WHERE name='content_history'`);
   const contents = [
-    ['article', 'Write about AI marketing automation trends in 2026',
-      'AI-Powered Marketing in 2026: The Automation Revolution\n\nSituation: Marketing teams are overwhelmed by data...', 'glm-4-air', 850],
-    ['social', 'Promote our new AI analytics feature launch',
-      "🚀 Big news! Our AI analytics just got smarter.\n\n#AIMarketing #GrowthHacking #MarTech", 'glm-4-flash', 120],
-    ['ad', 'Facebook ad for SaaS trial conversion',
-      'Stop Guessing. Start Growing.\n\nAttention: 73% of marketers miss revenue because they lack real-time insights...', 'glm-4-air', 310],
-    ['campaign', 'Summer growth campaign for B2B SaaS',
-      'Campaign: "Scale Season" Q3 Growth Push\nGoal: 200 trial signups, 40 conversions...', 'glm-4', 1200],
-    ['social', 'Share customer success story',
-      "💡 How TechCorp 3x'd their pipeline with AI GrowthOS\n\n#CustomerSuccess #B2BSaaS", 'glm-4-flash', 98],
+    ['article', '撰寫一篇 2026 年 AI 行銷自動化趨勢的文章',
+      'AI 驅動行銷 2026：自動化革命\n\n情境：行銷團隊正被海量數據淹沒，渠道數量是三年前的 5 倍…\n\n關鍵趨勢：預測式名單評分、內容隨買家階段自動調整、流失提前預警。', 'glm-4-air', 850],
+    ['social', '宣傳我們新上線的 AI 數據分析功能',
+      '🚀 重磅消息！我們的 AI 數據分析變得更聰明了。\n\n即時洞察、自動歸因、一鍵報表，行銷決策不再靠猜。\n\n#AI行銷 #成長駭客 #MarTech', 'glm-4-flash', 120],
+    ['ad', '撰寫提升 SaaS 試用轉化的 Facebook 廣告文案',
+      '別再用猜的，開始真正的成長。\n\n注意：73% 的行銷人因缺乏即時洞察而錯失營收。\n\nAI GrowthOS 讓每一分廣告預算都看得見成效。立即免費試用 →', 'glm-4-air', 310],
+    ['campaign', '規劃 B2B SaaS 的夏季成長活動',
+      '活動企劃：「規模季」Q3 成長衝刺\n目標：200 個試用註冊、40 個付費轉化\n節奏：W1-2 內容上線 → W3-4 開發信 → W5-6 線上講座 → W7-8 轉化衝刺', 'glm-4', 1200],
+    ['social', '分享客戶成功案例貼文',
+      '💡 TechCorp 如何用 AI GrowthOS 把商機數做到 3 倍\n\n從手動貼標到 AI 自動分群，他們只花了兩週。\n\n#客戶成功 #B2BSaaS', 'glm-4-flash', 98],
   ];
   contents.forEach(([type, prompt, output, model, tokens]) => {
     run(`INSERT INTO content_history (type, prompt, output, model_used, tokens_used) VALUES (?,?,?,?,?)`,
@@ -463,8 +513,9 @@ function seedDemoData() {
       [platform, name, channelId, webhook]);
   });
 
-  exec(`DELETE FROM conversations`);
-  exec(`DELETE FROM sqlite_sequence WHERE name='conversations'`);
+  // 語音通話紀錄（platform='voice'）是真實用戶資料，跨重啟保留；只重灌文字 demo 對話
+  exec(`DELETE FROM messages WHERE conversation_id IN (SELECT id FROM conversations WHERE platform != 'voice')`);
+  exec(`DELETE FROM conversations WHERE platform != 'voice'`);
   const now = new Date();
   const convos = [
     ['line', 1, 'Alice Chen', '🧑', 'U001', '請問你們的企業方案怎麼計費？', new Date(now - 5*60000).toISOString(), 'ai', 'open', 2, 'enterprise,inquiry'],
@@ -474,13 +525,13 @@ function seedDemoData() {
     ['email', 4, 'Emma Davis', '👱', 'E005', 'Refund request for order #992', new Date(now - 4*3600000).toISOString(), 'human', 'open', 3, 'refund,urgent'],
     ['whatsapp', 2, 'Frank Liu', '🧑', 'W006', '什麼時候可以發貨？', new Date(now - 6*3600000).toISOString(), 'ai', 'open', 1, 'shipping'],
   ];
+  const demoConvoIds = [];
   convos.forEach(([platform, acctId, name, avatar, userId, lastMsg, lastAt, assignedTo, status, unread, tags]) => {
-    run(`INSERT INTO conversations (platform, comm_account_id, contact_name, contact_avatar, channel_user_id, last_message, last_message_at, assigned_to, status, unread_count, tags) VALUES (?,?,?,?,?,?,?,?,?,?,?)`,
+    const info = run(`INSERT INTO conversations (platform, comm_account_id, contact_name, contact_avatar, channel_user_id, last_message, last_message_at, assigned_to, status, unread_count, tags) VALUES (?,?,?,?,?,?,?,?,?,?,?)`,
       [platform, acctId, name, avatar, userId, lastMsg, lastAt, assignedTo, status, unread, tags]);
+    demoConvoIds.push(info.lastInsertRowid);
   });
 
-  exec(`DELETE FROM messages`);
-  exec(`DELETE FROM sqlite_sequence WHERE name='messages'`);
   [
     [1, 'inbound', '請問你們的企業方案怎麼計費？', 'text', 'human', null, null],
     [1, 'outbound', '您好！我們的企業方案採用年費制，依照使用者數量和功能模組計費。基礎方案 $299/月，包含 5 個 AI 員工席位。請問您的團隊大概有多少人？', 'text', 'ai', 'acquisition', 4.8],
@@ -490,9 +541,9 @@ function seedDemoData() {
     [2, 'outbound', 'Hi Bob! I can see your order #1023 is currently in processing. Expected shipment is within 24 hours. Is there anything specific you need help with?', 'text', 'ai', 'order', 4.7],
     [5, 'inbound', 'Refund request for order #992', 'text', 'human', null, null],
     [5, 'outbound', 'Hi Emma, I\'ve received your refund request for order #992. Our policy allows returns within 7 days. A team member will review and process within 2 business days. Reference: REF-2026-992', 'text', 'ai', 'service', 4.5],
-  ].forEach(([convId, dir, content, type, sentBy, nodeType, score]) => {
+  ].forEach(([convIdx, dir, content, type, sentBy, nodeType, score]) => {
     run(`INSERT INTO messages (conversation_id, direction, content, message_type, sent_by, ai_node_type, quality_score) VALUES (?,?,?,?,?,?,?)`,
-      [convId, dir, content, type, sentBy, nodeType, score]);
+      [demoConvoIds[convIdx - 1], dir, content, type, sentBy, nodeType, score]);
   });
 
   exec(`DELETE FROM ai_reply_rules`);
@@ -584,6 +635,17 @@ function seedDemoData() {
   ].forEach(([cid, step, subject, content, days, hours, isActive, sent, opens, clicks]) => {
     run(`INSERT INTO email_sequences (campaign_id, step_number, subject, content, delay_days, delay_hours, is_active, sent_count, open_count, click_count) VALUES (?,?,?,?,?,?,?,?,?,?)`,
       [cid, step, subject, content, days, hours, isActive, sent, opens, clicks]);
+  });
+
+  exec(`DELETE FROM partners`);
+  exec(`DELETE FROM sqlite_sequence WHERE name='partners'`);
+  [
+    [4, 'David Kim', 'strategic', 0.25, 18, 45200],
+    [1, 'Alice Chen', 'distributor', 0.18, 11, 12800],
+    [7, 'Grace Park', 'affiliate', 0.10, 5, 3400],
+  ].forEach(([cid, name, tier, rate, refs, earnings]) => {
+    run(`INSERT INTO partners (contact_id, contact_name, tier, commission_rate, referral_count, total_earnings, status) VALUES (?,?,?,?,?,?,'active')`,
+      [cid, name, tier, rate, refs, earnings]);
   });
 
   exec(`DELETE FROM loyalty_transactions`);

@@ -1,5 +1,6 @@
 ﻿import React, { useState, useEffect, useCallback } from 'react';
 import { apiFetch } from '../utils/apiClient.js';
+import CampaignWizard from '../components/marketing/CampaignWizard.jsx';
 
 const TYPE_META = {
   email_sequence:   { label: 'Email 序列',    icon: '📧', color: '#3b82f6', bg: 'rgba(59,130,246,0.12)' },
@@ -66,7 +67,10 @@ export default function Marketing() {
   const [tplAarrr, setTplAarrr] = useState('all');
   const [tplType, setTplType] = useState('all');
   const [showCreate, setShowCreate] = useState(false);
-  const [newCampaign, setNewCampaign] = useState({ name: '', type: 'email_sequence', trigger_type: 'manual', audience_segment: 'all' });
+  const [wizardInitial, setWizardInitial] = useState({});
+  const [executing, setExecuting] = useState(false);
+  const [execResult, setExecResult] = useState(null);
+  const [toast, setToast] = useState(null);
 
   const fetchData = useCallback(() => {
     setLoading(true);
@@ -95,20 +99,39 @@ export default function Marketing() {
     }
   };
 
-  const handleCreate = async () => {
-    if (!newCampaign.name.trim()) return;
-    await apiFetch('/api/marketing/campaigns', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(newCampaign),
-    });
-    setShowCreate(false);
-    setNewCampaign({ name: '', type: 'email_sequence', trigger_type: 'manual', audience_segment: 'all' });
-    fetchData();
-  };
-
   const fetchCampaignDetail = async (id) => {
     const data = await apiFetch(`/api/marketing/campaigns/${id}`).then(r => r.json());
     setSelectedCampaign(data);
+    setExecResult(null);
+  };
+
+  const showToastMsg = (msg) => {
+    setToast(msg);
+    setTimeout(() => setToast(null), 5000);
+  };
+
+  const handleExecute = async (id) => {
+    setExecuting(true);
+    setExecResult(null);
+    try {
+      const r = await apiFetch(`/api/marketing/campaigns/${id}/execute`, { method: 'POST', headers: { 'Content-Type': 'application/json' } });
+      const data = await r.json();
+      if (!r.ok) { showToastMsg(`⚠️ ${data.error || '執行失敗'}`); return; }
+      setExecResult(data);
+      showToastMsg(`✅ 已模擬發送 ${data.sent} 人（AI 個性化 ${data.aiGenerated} 則）`);
+      fetchData();
+      fetchCampaignDetailKeepResult(id, data);
+    } catch {
+      showToastMsg('⚠️ 網路錯誤');
+    } finally {
+      setExecuting(false);
+    }
+  };
+
+  const fetchCampaignDetailKeepResult = async (id, result) => {
+    const data = await apiFetch(`/api/marketing/campaigns/${id}`).then(r => r.json());
+    setSelectedCampaign(data);
+    setExecResult(result);
   };
 
   const CARD = { background: '#1a1d2e', border: '1px solid #2a2d3e', borderRadius: 12, padding: '18px 20px' };
@@ -122,7 +145,7 @@ export default function Marketing() {
           <h1 style={{ fontSize: 22, fontWeight: 700, color: '#f9fafb', margin: 0 }}>行銷自動化</h1>
           <p style={{ color: '#6b7280', fontSize: 13, margin: '4px 0 0' }}>AARRR 全旅程自動化 · 多渠道觸達</p>
         </div>
-        <button onClick={() => setShowCreate(true)} style={{
+        <button onClick={() => { setWizardInitial({}); setShowCreate(true); }} style={{
           padding: '8px 16px', borderRadius: 8, background: 'linear-gradient(90deg, #3b82f6, #8b5cf6)',
           border: 'none', color: '#fff', fontSize: 13, fontWeight: 600, cursor: 'pointer',
         }}>
@@ -253,10 +276,75 @@ export default function Marketing() {
                 <button onClick={() => setSelectedCampaign(null)} style={{ background: 'none', border: 'none', color: '#6b7280', fontSize: 20, cursor: 'pointer', flexShrink: 0 }}>×</button>
               </div>
 
-              <div style={{ display: 'flex', gap: 8, marginBottom: 16, flexWrap: 'wrap' }}>
+              <div style={{ display: 'flex', gap: 8, marginBottom: 12, flexWrap: 'wrap' }}>
                 <TypeBadge type={selectedCampaign.type} />
                 <StatusBadge status={selectedCampaign.status} />
               </div>
+
+              {/* 觸發與受眾摘要 */}
+              <div style={{ background: '#0f1117', borderRadius: 8, padding: '10px 12px', marginBottom: 8, fontSize: 12 }}>
+                <div style={{ color: '#6b7280', fontSize: 10, marginBottom: 3 }}>觸發方式</div>
+                <div style={{ color: '#e5e7eb' }}>
+                  {(() => {
+                    const tc = selectedCampaign.trigger_config_parsed || {};
+                    if (selectedCampaign.trigger_type === 'scheduled') {
+                      const rec = { once: '單次', daily: '每天', weekly: '每週', monthly: '每月' }[tc.recurrence] || '';
+                      return `🕐 ${tc.date || ''} ${tc.time || ''} ${rec}執行${selectedCampaign.next_run_at ? ` · 下次：${new Date(selectedCampaign.next_run_at).toLocaleString('zh-TW')}` : ''}`;
+                    }
+                    if (selectedCampaign.trigger_type === 'event_based') {
+                      const evLabels = { user_signup: '用戶註冊', first_purchase: '首次購買', cart_abandoned: '購物車放棄', inactive_n_days: `${tc.n || ''} 天未活躍`, birthday: '會員生日', points_threshold: `積分達 ${tc.n || ''}`, order_status_change: '訂單狀態變更', member_upgrade: '會員升級' };
+                      return `⚡ ${evLabels[tc.event] || tc.event || '事件'} 時自動觸發`;
+                    }
+                    return '▶️ 手動觸發';
+                  })()}
+                </div>
+              </div>
+
+              {/* AI 自動執行狀態 + 關聯規則 */}
+              {(selectedCampaign.ai_config_parsed?.auto_execute || selectedCampaign.linked_rule) && (
+                <div style={{ background: 'rgba(16,185,129,0.06)', border: '1px solid rgba(16,185,129,0.2)', borderRadius: 8, padding: '10px 12px', marginBottom: 8, fontSize: 12 }}>
+                  {selectedCampaign.ai_config_parsed?.auto_execute && (
+                    <div style={{ color: '#34d399', marginBottom: selectedCampaign.linked_rule ? 6 : 0 }}>
+                      🤖 AI 自動執行已開啟（{selectedCampaign.ai_config_parsed.model}）
+                    </div>
+                  )}
+                  {selectedCampaign.linked_rule && (
+                    <div style={{ color: '#9ca3af', display: 'flex', alignItems: 'center', gap: 6 }}>
+                      ⚡ 關聯 AI 回覆規則：<span style={{ color: '#e5e7eb' }}>{selectedCampaign.linked_rule.name}</span>
+                      <span style={{ fontSize: 10, padding: '1px 6px', borderRadius: 10, background: selectedCampaign.linked_rule.is_active ? 'rgba(16,185,129,0.15)' : 'rgba(107,114,128,0.15)', color: selectedCampaign.linked_rule.is_active ? '#34d399' : '#9ca3af' }}>
+                        {selectedCampaign.linked_rule.is_active ? '啟用中' : '已停用'}
+                      </span>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* 立即執行 */}
+              <button onClick={() => handleExecute(selectedCampaign.id)} disabled={executing} style={{
+                width: '100%', padding: '10px', borderRadius: 8, border: 'none', fontSize: 13, fontWeight: 600, marginBottom: 12,
+                background: executing ? '#2a2d3e' : 'linear-gradient(90deg,#10b981,#3b82f6)',
+                color: executing ? '#6b7280' : '#fff', cursor: executing ? 'wait' : 'pointer',
+              }}>
+                {executing ? '⏳ AI 生成與模擬發送中…' : '⚡ 立即執行（模擬發送）'}
+              </button>
+
+              {/* 執行結果摘要 */}
+              {execResult && (
+                <div style={{ background: '#0f1117', borderRadius: 8, padding: '10px 12px', marginBottom: 12, borderLeft: '3px solid #10b981' }}>
+                  <div style={{ fontSize: 12, color: '#34d399', fontWeight: 600, marginBottom: 6 }}>
+                    ✅ 執行完成 — 觸達 {execResult.sent} 人（AI 個性化 {execResult.aiGenerated}、模板 {execResult.templated}）
+                  </div>
+                  {execResult.sampleMessages?.map((m, i) => (
+                    <div key={i} style={{ fontSize: 11, color: '#9ca3af', padding: '5px 0', borderTop: i > 0 ? '1px solid #1e2035' : 'none' }}>
+                      <span style={{ color: '#e5e7eb' }}>{m.contact}</span>
+                      <span style={{ fontSize: 9, marginLeft: 5, padding: '1px 5px', borderRadius: 8, background: m.personalization === 'ai' ? 'rgba(139,92,246,0.15)' : 'rgba(107,114,128,0.15)', color: m.personalization === 'ai' ? '#a78bfa' : '#9ca3af' }}>
+                        {m.personalization === 'ai' ? 'AI' : '模板'}
+                      </span>
+                      <div style={{ marginTop: 2, lineHeight: 1.5 }}>{m.message}</div>
+                    </div>
+                  ))}
+                </div>
+              )}
 
               {/* KPIs */}
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 8, marginBottom: 16 }}>
@@ -274,6 +362,26 @@ export default function Marketing() {
                   </div>
                 ))}
               </div>
+
+              {/* 執行日誌 */}
+              {selectedCampaign.executions?.length > 0 && (
+                <div style={{ marginBottom: 14 }}>
+                  <div style={{ fontSize: 11, color: '#6b7280', marginBottom: 8, letterSpacing: '0.05em' }}>執行日誌（最近 {selectedCampaign.executions.length} 筆）</div>
+                  <div style={{ maxHeight: 200, overflowY: 'auto' }}>
+                    {selectedCampaign.executions.map(ex => (
+                      <div key={ex.id} style={{ background: '#0f1117', borderRadius: 6, padding: '7px 10px', marginBottom: 4, fontSize: 11 }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', color: '#9ca3af' }}>
+                          <span style={{ color: '#e5e7eb' }}>{ex.contact_name} · {ex.channel}</span>
+                          <span style={{ fontSize: 10 }}>{new Date(ex.executed_at).toLocaleString('zh-TW', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })}</span>
+                        </div>
+                        <div style={{ color: '#6b7280', marginTop: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={ex.message_content}>
+                          {ex.personalization === 'ai' ? '🤖' : '📄'} {ex.message_content}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
 
               {/* Email sequences */}
               {selectedCampaign.sequences?.length > 0 && (
@@ -432,11 +540,11 @@ export default function Marketing() {
                             {tpl.steps} 個步驟 · {TRIGGER_LABELS[tpl.trigger] || tpl.trigger}
                           </span>
                           <button onClick={() => {
-                            setNewCampaign({
+                            setWizardInitial({
                               name: tpl.name,
-                              type: tpl.type === 'line_message' ? 'sms' : tpl.type,
-                              trigger_type: tpl.trigger === 'scheduled' ? 'scheduled' : tpl.trigger === 'user_signup' ? 'event_based' : 'event_based',
-                              audience_segment: 'all',
+                              type: TYPE_META[tpl.type] ? tpl.type : 'line_message',
+                              trigger_type: tpl.trigger === 'scheduled' ? 'scheduled' : tpl.trigger === 'manual' ? 'manual' : 'event_based',
+                              message_template: tpl.preview || undefined,
                             });
                             setTab('campaigns');
                             setShowCreate(true);
@@ -519,66 +627,28 @@ export default function Marketing() {
         </div>
       )}
 
-      {/* Create Campaign Modal */}
+      {/* Create Campaign Wizard */}
       {showCreate && (
-        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-          onClick={e => e.target === e.currentTarget && setShowCreate(false)}>
-          <div className="fade-in" style={{ background: '#1a1d2e', border: '1px solid #2a2d3e', borderRadius: 16, padding: 28, width: 440 }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 20 }}>
-              <h2 style={{ fontSize: 18, fontWeight: 700, color: '#f9fafb', margin: 0 }}>建立行銷活動</h2>
-              <button onClick={() => setShowCreate(false)} style={{ background: 'none', border: 'none', color: '#6b7280', fontSize: 22, cursor: 'pointer' }}>×</button>
-            </div>
+        <CampaignWizard
+          initial={wizardInitial}
+          onClose={() => setShowCreate(false)}
+          onCreated={(created) => {
+            fetchData();
+            showToastMsg(created.linked_rule
+              ? `✅ 活動「${created.name}」已建立，並同步建立 AI 回覆規則「${created.linked_rule.name}」`
+              : `✅ 活動「${created.name}」已建立（預估受眾 ${created.target_count ?? 0} 人）`);
+          }}
+        />
+      )}
 
-            <div style={{ marginBottom: 14 }}>
-              <label style={{ fontSize: 12, color: '#9ca3af', display: 'block', marginBottom: 5 }}>活動名稱 *</label>
-              <input value={newCampaign.name} onChange={e => setNewCampaign(p => ({ ...p, name: e.target.value }))}
-                placeholder="例：新用戶 7 天激活序列"
-                style={{ ...INP, width: '100%', boxSizing: 'border-box' }} />
-            </div>
-
-            <div style={{ marginBottom: 14 }}>
-              <label style={{ fontSize: 12, color: '#9ca3af', display: 'block', marginBottom: 5 }}>類型</label>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 8 }}>
-                {Object.entries(TYPE_META).map(([key, meta]) => (
-                  <button key={key} onClick={() => setNewCampaign(p => ({ ...p, type: key }))} style={{
-                    padding: '8px 12px', borderRadius: 8, border: `1px solid ${newCampaign.type === key ? meta.color : '#2a2d3e'}`,
-                    background: newCampaign.type === key ? meta.bg : 'transparent',
-                    color: newCampaign.type === key ? meta.color : '#9ca3af',
-                    cursor: 'pointer', fontSize: 12, fontWeight: 500, display: 'flex', alignItems: 'center', gap: 6,
-                  }}>
-                    {meta.icon} {meta.label}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            <div style={{ marginBottom: 14 }}>
-              <label style={{ fontSize: 12, color: '#9ca3af', display: 'block', marginBottom: 5 }}>觸發方式</label>
-              <select value={newCampaign.trigger_type} onChange={e => setNewCampaign(p => ({ ...p, trigger_type: e.target.value }))}
-                style={{ ...INP, width: '100%', boxSizing: 'border-box', cursor: 'pointer' }}>
-                {Object.entries(TRIGGER_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
-              </select>
-            </div>
-
-            <div style={{ marginBottom: 20 }}>
-              <label style={{ fontSize: 12, color: '#9ca3af', display: 'block', marginBottom: 5 }}>目標受眾</label>
-              <select value={newCampaign.audience_segment} onChange={e => setNewCampaign(p => ({ ...p, audience_segment: e.target.value }))}
-                style={{ ...INP, width: '100%', boxSizing: 'border-box', cursor: 'pointer' }}>
-                {[['all','全部用戶'],['new_users','新用戶'],['at_risk','高流失風險'],['loyal','忠誠客戶'],['community','社群成員'],['event_attendees','活動參與者']].map(([k, v]) => (
-                  <option key={k} value={k}>{v}</option>
-                ))}
-              </select>
-            </div>
-
-            <button onClick={handleCreate} disabled={!newCampaign.name.trim()} style={{
-              width: '100%', padding: '10px', borderRadius: 8, border: 'none', fontSize: 14, fontWeight: 600,
-              background: newCampaign.name.trim() ? 'linear-gradient(90deg, #3b82f6, #8b5cf6)' : '#2a2d3e',
-              color: newCampaign.name.trim() ? '#fff' : '#6b7280',
-              cursor: newCampaign.name.trim() ? 'pointer' : 'not-allowed',
-            }}>
-              建立活動
-            </button>
-          </div>
+      {/* Toast */}
+      {toast && (
+        <div style={{
+          position: 'fixed', top: 20, right: 20, zIndex: 1100, maxWidth: 420,
+          background: '#1a1d2e', border: '1px solid #3b82f6', borderRadius: 10,
+          padding: '12px 16px', fontSize: 13, color: '#e5e7eb', boxShadow: '0 8px 24px rgba(0,0,0,0.4)',
+        }}>
+          {toast}
         </div>
       )}
     </div>

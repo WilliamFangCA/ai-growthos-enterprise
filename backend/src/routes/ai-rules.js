@@ -5,10 +5,13 @@ const { callAI } = require('../aiRouter');
 
 const TRIGGER_TYPES = ['acquisition','activation','retention','revenue','referral','order_status','service','event','vip','community','content_event'];
 
-// GET /api/ai-rules
+// GET /api/ai-rules（含來源活動名稱；活動可能因重啟重灌而不存在，需 null 安全）
 router.get('/', (req, res) => {
   try {
-    const rules = all('SELECT * FROM ai_reply_rules ORDER BY trigger_type, name');
+    const rules = all(`
+      SELECT r.*, c.name AS campaign_name
+      FROM ai_reply_rules r LEFT JOIN campaigns c ON c.id = r.campaign_id
+      ORDER BY r.trigger_type, r.name`);
     res.json(rules.map(r => ({ ...r, trigger_condition: JSON.parse(r.trigger_condition || '{}'), platforms: JSON.parse(r.platforms || '["all"]') })));
   } catch (err) {
     res.status(500).json({ error: err.message });

@@ -11,6 +11,7 @@ const PLATFORM_META = {
   instagram: { label: 'Instagram', color: 'bg-pink-500',   text: 'text-pink-600',   icon: '📸' },
   email:     { label: 'Email',     color: 'bg-orange-500', text: 'text-orange-600', icon: '📧' },
   wechat:    { label: 'WeChat',    color: 'bg-lime-500',   text: 'text-lime-600',   icon: '💚' },
+  voice:     { label: '語音通話',   color: 'bg-teal-500',   text: 'text-teal-600',   icon: '📞' },
 };
 
 const SKIPPED_LABEL = {

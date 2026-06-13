@@ -17,6 +17,12 @@ import AIRules from './pages/AIRules.jsx';
 import Marketing from './pages/Marketing.jsx';
 import Analytics from './pages/Analytics.jsx';
 import Settings from './pages/Settings.jsx';
+import Membership from './pages/Membership.jsx';
+import Toolbox from './pages/Toolbox.jsx';
+import VoiceHub from './pages/VoiceHub.jsx';
+
+// React Flow 編輯器較大，獨立 chunk 延遲載入
+const WorkflowBuilder = React.lazy(() => import('./pages/WorkflowBuilder.jsx'));
 
 function LoadingScreen() {
   return (
@@ -36,10 +42,15 @@ function AppRoutes() {
       <Route path="content" element={<ContentFactory />} />
       <Route path="crm" element={<CRM />} />
       <Route path="workflows" element={<Workflows />} />
+      <Route path="workflows/builder" element={<React.Suspense fallback={<LoadingScreen />}><WorkflowBuilder /></React.Suspense>} />
+      <Route path="workflows/builder/:id" element={<React.Suspense fallback={<LoadingScreen />}><WorkflowBuilder /></React.Suspense>} />
       <Route path="comms" element={<CommHub />} />
+      <Route path="voice" element={<VoiceHub />} />
       <Route path="orders" element={<Orders />} />
       <Route path="ai-rules" element={<AIRules />} />
       <Route path="marketing" element={<Marketing />} />
+      <Route path="membership" element={<Membership />} />
+      <Route path="toolbox" element={<Toolbox />} />
       <Route path="analytics" element={<Analytics />} />
       <Route path="settings" element={<Settings />} />
     </Routes>

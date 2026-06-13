@@ -1,4 +1,5 @@
 ﻿import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { apiFetch } from '../utils/apiClient.js';
 
 const CATEGORY_CONFIG = {
@@ -374,7 +375,83 @@ function CreateModal({ onClose, onCreate }) {
   );
 }
 
+function TemplatesModal({ onClose, onInstalled }) {
+  const [templates, setTemplates] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [installing, setInstalling] = useState(null);
+
+  useEffect(() => {
+    apiFetch('/api/workflows/templates')
+      .then(r => r.json())
+      .then(data => { setTemplates(Array.isArray(data) ? data : []); setLoading(false); })
+      .catch(() => setLoading(false));
+  }, []);
+
+  async function handleInstall(tpl) {
+    setInstalling(tpl.id);
+    try {
+      const res = await apiFetch(`/api/workflows/templates/${tpl.id}/install`, { method: 'POST', headers: { 'Content-Type': 'application/json' } });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || '安裝失敗');
+      setTemplates(prev => prev.map(t => t.id === tpl.id ? { ...t, installed: true } : t));
+      onInstalled(data, tpl.name);
+    } catch (err) {
+      onInstalled(null, tpl.name, err.message);
+    } finally {
+      setInstalling(null);
+    }
+  }
+
+  return (
+    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.75)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}
+      onClick={e => e.target === e.currentTarget && onClose()}>
+      <div style={{ background: '#1a1d2e', border: '1px solid #2a2d3e', borderRadius: 16, padding: 28, width: '100%', maxWidth: 720, maxHeight: '88vh', overflowY: 'auto' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+          <h2 style={{ fontSize: 18, fontWeight: 700, color: '#f9fafb', margin: 0 }}>📦 Workflow 模板庫</h2>
+          <button onClick={onClose} style={{ background: 'none', border: 'none', color: '#6b7280', fontSize: 22, cursor: 'pointer' }}>×</button>
+        </div>
+        <p style={{ fontSize: 12, color: '#6b7280', margin: '0 0 16px' }}>涵蓋社群暖場、活動全流程、退款預審、合伙人分潤等場景，一鍵安裝即可使用，安裝後可自由修改。</p>
+
+        {loading ? (
+          <div style={{ padding: 28, color: '#6b7280', fontSize: 13, display: 'flex', alignItems: 'center', gap: 10 }}>
+            <div className="spinner" /> 載入模板中...
+          </div>
+        ) : (
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+            {templates.map(tpl => {
+              const catCfg = CATEGORY_CONFIG[tpl.category] || CATEGORY_CONFIG.general;
+              return (
+                <div key={tpl.id} style={{ background: '#0f1117', border: '1px solid #2a2d3e', borderRadius: 12, padding: 16, display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <span style={{ fontSize: 20 }}>{tpl.icon}</span>
+                    <span style={{ fontSize: 13, fontWeight: 600, color: '#f9fafb', flex: 1 }}>{tpl.name}</span>
+                    <span style={{ fontSize: 10, padding: '2px 8px', borderRadius: 20, background: catCfg.bg, color: catCfg.color, whiteSpace: 'nowrap' }}>
+                      {catCfg.icon} {catCfg.label}
+                    </span>
+                  </div>
+                  <p style={{ fontSize: 11, color: '#9ca3af', margin: 0, lineHeight: 1.5, flex: 1 }}>{tpl.description}</p>
+                  <div style={{ fontSize: 10, color: '#4b5563' }}>{TRIGGER_ICONS[tpl.trigger_type] || '⚡'} {tpl.trigger_type.replace(/_/g, ' ')} · {tpl.actions.length} 步驟</div>
+                  <button onClick={() => !tpl.installed && handleInstall(tpl)} disabled={tpl.installed || installing === tpl.id} style={{
+                    padding: '7px 0', borderRadius: 8, fontSize: 12, fontWeight: 600,
+                    cursor: tpl.installed ? 'default' : 'pointer',
+                    background: tpl.installed ? 'rgba(16,185,129,0.12)' : installing === tpl.id ? '#2a2d3e' : 'linear-gradient(90deg,#3b82f6,#8b5cf6)',
+                    border: tpl.installed ? '1px solid rgba(16,185,129,0.3)' : 'none',
+                    color: tpl.installed ? '#34d399' : installing === tpl.id ? '#6b7280' : '#fff',
+                  }}>
+                    {tpl.installed ? '✓ 已安裝' : installing === tpl.id ? '安裝中...' : '⬇ 一鍵安裝'}
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 export default function Workflows() {
+  const navigate = useNavigate();
   const [workflows, setWorkflows] = useState([]);
   const [stats, setStats] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -382,6 +459,7 @@ export default function Workflows() {
   const [toast, setToast] = useState(null);
   const [expandedId, setExpandedId] = useState(null);
   const [showCreate, setShowCreate] = useState(false);
+  const [showTemplates, setShowTemplates] = useState(false);
   const [activeCategory, setActiveCategory] = useState('all');
 
   useEffect(() => {
@@ -412,6 +490,36 @@ export default function Workflows() {
     }
   };
 
+  const handleToggleStatus = async (workflow) => {
+    const next = workflow.status === 'paused' ? 'active' : 'paused';
+    try {
+      const res = await apiFetch(`/api/workflows/${workflow.id}/status`, {
+        method: 'PUT', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: next }),
+      });
+      const data = await res.json();
+      if (data.error) throw new Error(data.error);
+      setWorkflows(prev => prev.map(w => w.id === workflow.id ? { ...w, status: next } : w));
+      setToast({ message: next === 'paused' ? `「${workflow.name}」已暫停，不會再自動執行` : `「${workflow.name}」已恢復運行`, type: 'success' });
+    } catch (err) {
+      setToast({ message: err.message, type: 'error' });
+    }
+  };
+
+  const handleDelete = async (workflow) => {
+    if (!window.confirm(`確定刪除「${workflow.name}」嗎？\n歷史執行記錄會保留供分析，但此 Workflow 將無法復原。`)) return;
+    try {
+      const res = await apiFetch(`/api/workflows/${workflow.id}`, { method: 'DELETE' });
+      const data = await res.json();
+      if (data.error) throw new Error(data.error);
+      setWorkflows(prev => prev.filter(w => w.id !== workflow.id));
+      setExpandedId(null);
+      setToast({ message: `「${workflow.name}」已刪除`, type: 'success' });
+    } catch (err) {
+      setToast({ message: err.message, type: 'error' });
+    }
+  };
+
   const filtered = activeCategory === 'all' ? workflows : workflows.filter(w => w.category === activeCategory);
   const totalRuns = workflows.reduce((s, w) => s + (w.run_count || 0), 0);
   const activeCount = workflows.filter(w => w.status === 'active').length;
@@ -428,12 +536,28 @@ export default function Workflows() {
             {activeCount} active · {totalRuns.toLocaleString()} total runs {stats?.todayRuns ? `· 今日 +${stats.todayRuns}` : ''}
           </p>
         </div>
-        <button onClick={() => setShowCreate(true)} style={{
-          padding: '9px 18px', borderRadius: 8, border: 'none', cursor: 'pointer', fontSize: 13, fontWeight: 600,
-          background: 'linear-gradient(90deg,#3b82f6,#8b5cf6)', color: '#fff', display: 'flex', alignItems: 'center', gap: 6,
-        }}>
-          + 建立 Workflow
-        </button>
+        <div style={{ display: 'flex', gap: 10 }}>
+          <button onClick={() => setShowTemplates(true)} style={{
+            padding: '9px 18px', borderRadius: 8, cursor: 'pointer', fontSize: 13, fontWeight: 600,
+            background: 'rgba(139,92,246,0.12)', border: '1px solid rgba(139,92,246,0.4)', color: '#a78bfa',
+            display: 'flex', alignItems: 'center', gap: 6,
+          }}>
+            📦 模板庫
+          </button>
+          <button onClick={() => setShowCreate(true)} style={{
+            padding: '9px 18px', borderRadius: 8, cursor: 'pointer', fontSize: 13, fontWeight: 600,
+            background: 'rgba(59,130,246,0.12)', border: '1px solid rgba(59,130,246,0.4)', color: '#60a5fa',
+            display: 'flex', alignItems: 'center', gap: 6,
+          }}>
+            ⚡ AI 快速建立
+          </button>
+          <button onClick={() => navigate('/app/workflows/builder')} style={{
+            padding: '9px 18px', borderRadius: 8, border: 'none', cursor: 'pointer', fontSize: 13, fontWeight: 600,
+            background: 'linear-gradient(90deg,#3b82f6,#8b5cf6)', color: '#fff', display: 'flex', alignItems: 'center', gap: 6,
+          }}>
+            🎨 視覺化流程編輯器
+          </button>
+        </div>
       </div>
 
       {/* Stats */}
@@ -545,6 +669,28 @@ export default function Workflows() {
                     )}
                     <div style={{ fontSize: 11, color: '#6b7280', marginBottom: 10, letterSpacing: '0.06em', textTransform: 'uppercase' }}>Flow Diagram</div>
                     <DAGFlow trigger_type={workflow.trigger_type} actions={workflow.actions || []} />
+                    <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 14, paddingTop: 12, borderTop: '1px solid #1e2035' }}>
+                      <button onClick={() => navigate(`/app/workflows/builder/${workflow.id}`)} style={{
+                        padding: '6px 14px', borderRadius: 7, fontSize: 11, fontWeight: 500, cursor: 'pointer',
+                        background: 'rgba(59,130,246,0.12)', border: '1px solid rgba(59,130,246,0.35)', color: '#60a5fa',
+                      }}>
+                        🎨 在編輯器中開啟
+                      </button>
+                      <button onClick={() => handleToggleStatus(workflow)} style={{
+                        padding: '6px 14px', borderRadius: 7, fontSize: 11, fontWeight: 500, cursor: 'pointer',
+                        background: workflow.status === 'paused' ? 'rgba(16,185,129,0.12)' : 'rgba(245,158,11,0.12)',
+                        border: `1px solid ${workflow.status === 'paused' ? 'rgba(16,185,129,0.35)' : 'rgba(245,158,11,0.35)'}`,
+                        color: workflow.status === 'paused' ? '#34d399' : '#fbbf24',
+                      }}>
+                        {workflow.status === 'paused' ? '▶ 恢復運行' : '⏸ 暫停'}
+                      </button>
+                      <button onClick={() => handleDelete(workflow)} style={{
+                        padding: '6px 14px', borderRadius: 7, fontSize: 11, fontWeight: 500, cursor: 'pointer',
+                        background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.3)', color: '#f87171',
+                      }}>
+                        🗑 刪除
+                      </button>
+                    </div>
                   </div>
                 )}
               </div>
@@ -554,6 +700,19 @@ export default function Workflows() {
       </div>
 
       {showCreate && <CreateModal onClose={() => setShowCreate(false)} onCreate={w => setWorkflows(prev => [{ ...w, actions: w.actions || JSON.parse(w.actions_json || '[]') }, ...prev])} />}
+      {showTemplates && (
+        <TemplatesModal
+          onClose={() => setShowTemplates(false)}
+          onInstalled={(created, name, errMsg) => {
+            if (created) {
+              setWorkflows(prev => [{ ...created, actions: created.actions || JSON.parse(created.actions_json || '[]') }, ...prev]);
+              setToast({ message: `「${name}」已安裝並啟用`, type: 'success' });
+            } else {
+              setToast({ message: errMsg || `「${name}」安裝失敗`, type: 'error' });
+            }
+          }}
+        />
+      )}
       {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
     </div>
   );

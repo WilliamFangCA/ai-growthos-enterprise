@@ -1,6 +1,19 @@
 const express = require('express');
 const router = express.Router();
 const { run, get, all } = require('../db');
+const campaignEngine = require('../services/campaignEngine');
+
+// 行銷事件 → AI 回覆規則 trigger_type 對應（建立活動同步建立規則時使用）
+const EVENT_TO_RULE_TRIGGER = {
+  user_signup: 'acquisition',
+  first_purchase: 'activation',
+  cart_abandoned: 'revenue',
+  points_threshold: 'revenue',
+  inactive_n_days: 'retention',
+  birthday: 'retention',
+  order_status_change: 'order_status',
+  member_upgrade: 'vip',
+};
 
 // GET /api/marketing/stats
 router.get('/stats', (req, res) => {
@@ -35,27 +48,100 @@ router.get('/campaigns', (req, res) => {
   }
 });
 
-// GET /api/marketing/campaigns/:id
-router.get('/campaigns/:id', (req, res) => {
+// POST /api/marketing/audience/count — 受眾預估（即時預覽觸達人數）
+router.post('/audience/count', (req, res) => {
   try {
-    const campaign = get(`SELECT * FROM campaigns WHERE id = ?`, [req.params.id]);
-    if (!campaign) return res.status(404).json({ error: 'Not found' });
-    const sequences = all(`SELECT * FROM email_sequences WHERE campaign_id = ? ORDER BY step_number`, [req.params.id]);
-    res.json({ ...campaign, sequences });
+    res.json(campaignEngine.countAudience(req.body || {}));
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
 
-// POST /api/marketing/campaigns
+// GET /api/marketing/campaigns/:id — 含解析後設定、關聯 AI 規則、近期執行
+router.get('/campaigns/:id', (req, res) => {
+  try {
+    const campaign = get(`SELECT * FROM campaigns WHERE id = ?`, [req.params.id]);
+    if (!campaign) return res.status(404).json({ error: 'Not found' });
+    const sequences = all(`SELECT * FROM email_sequences WHERE campaign_id = ? ORDER BY step_number`, [req.params.id]);
+    const linkedRule = get(`SELECT id, name, trigger_type, is_active, fire_count FROM ai_reply_rules WHERE campaign_id = ?`, [req.params.id]) || null;
+    const executions = all(`SELECT * FROM campaign_executions WHERE campaign_id = ? ORDER BY executed_at DESC LIMIT 30`, [req.params.id]);
+    res.json({
+      ...campaign,
+      trigger_config_parsed: JSON.parse(campaign.trigger_config || '{}'),
+      audience_config_parsed: JSON.parse(campaign.audience_config || '{}'),
+      ai_config_parsed: JSON.parse(campaign.ai_config || '{}'),
+      sequences,
+      linked_rule: linkedRule,
+      executions,
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/marketing/campaigns — 完整建立（觸發設定 + 受眾 + AI 自動執行 + 可選同步建立 AI 規則）
 router.post('/campaigns', (req, res) => {
   try {
-    const { name, type, trigger_type, trigger_config, audience_segment } = req.body;
+    const {
+      name, type, trigger_type,
+      trigger_config = {},      // scheduled: {date,time,recurrence} / event_based: {event,n}
+      audience_segment,         // 人類可讀摘要標籤
+      audience_config = {},     // {stages,rfm_buckets,member_levels,tags}
+      ai_config = {},           // {auto_execute,message_template,model}
+      create_reply_rule = false,
+    } = req.body;
     if (!name || !type) return res.status(400).json({ error: 'name and type required' });
-    run(`INSERT INTO campaigns (name, type, trigger_type, trigger_config, audience_segment) VALUES (?,?,?,?,?)`,
-      [name, type, trigger_type || 'manual', trigger_config || '{}', audience_segment || 'all']);
+
+    const targetCount = campaignEngine.countAudience(audience_config).count;
+    const nextRunAt = trigger_type === 'scheduled' ? campaignEngine.computeNextRunAt(trigger_config, null) : null;
+
+    run(`INSERT INTO campaigns (name, type, trigger_type, trigger_config, audience_segment, audience_config, ai_config, target_count, next_run_at, status)
+         VALUES (?,?,?,?,?,?,?,?,?,?)`,
+      [name, type, trigger_type || 'manual', JSON.stringify(trigger_config), audience_segment || 'all',
+       JSON.stringify(audience_config), JSON.stringify(ai_config), targetCount, nextRunAt,
+       trigger_type === 'scheduled' || trigger_type === 'event_based' ? 'active' : 'draft']);
     const created = get(`SELECT * FROM campaigns ORDER BY id DESC LIMIT 1`);
-    res.status(201).json(created);
+
+    // 同步建立關聯 AI 自動回覆規則
+    let linkedRule = null;
+    if (create_reply_rule) {
+      const ruleTrigger = EVENT_TO_RULE_TRIGGER[trigger_config.event] || 'retention';
+      run(`INSERT INTO ai_reply_rules (name, trigger_type, trigger_condition, reply_template, model, language, platforms, is_active, campaign_id)
+           VALUES (?,?,?,?,?,?,?,1,?)`,
+        [`[活動] ${name}`, ruleTrigger, JSON.stringify({ source: 'campaign', campaign_id: created.id, ...trigger_config }),
+         ai_config.message_template || `您好 {name}，感謝參與「${name}」活動！`,
+         ai_config.model || 'glm-5-turbo', 'auto', JSON.stringify(['all']), created.id]);
+      linkedRule = get(`SELECT id, name, trigger_type, is_active FROM ai_reply_rules WHERE campaign_id = ?`, [created.id]);
+    }
+
+    res.status(201).json({ ...created, linked_rule: linkedRule, target_count: targetCount });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/marketing/campaigns/:id/execute — 立即執行（模擬發送 + AI 個性化 + 完整日誌）
+router.post('/campaigns/:id/execute', async (req, res) => {
+  try {
+    const summary = await campaignEngine.executeCampaign(
+      parseInt(req.params.id, 10),
+      req.user?.email || 'manual'
+    );
+    res.json(summary);
+  } catch (err) {
+    res.status(err.message.includes('not found') ? 404 : 500).json({ error: err.message });
+  }
+});
+
+// GET /api/marketing/campaigns/:id/executions — 執行日誌
+router.get('/campaigns/:id/executions', (req, res) => {
+  try {
+    const { batch_id } = req.query;
+    let sql = `SELECT * FROM campaign_executions WHERE campaign_id = ?`;
+    const params = [req.params.id];
+    if (batch_id) { sql += ' AND batch_id = ?'; params.push(batch_id); }
+    sql += ' ORDER BY executed_at DESC LIMIT 100';
+    res.json(all(sql, params));
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
