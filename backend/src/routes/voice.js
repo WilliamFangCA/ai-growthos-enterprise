@@ -1,12 +1,17 @@
 // 語音通話中台：AI 語音客服
-// 流程：前端瀏覽器辨識語音 → /call/:id/turn 送文字 → AI 生成回覆 → MiniMax TTS 合成 → 回傳 mp3 base64
+// 支援：MiniMax、OpenAI、CosyVoice、ChatTTS、XTTS（含聲音複製）
 // 所有對話逐字稿寫入 conversations(platform='voice') + messages，與通訊中台共用收件匣
 
 const express = require('express');
+const path = require('path');
+const fs = require('fs');
 const router = express.Router();
 const { callAI } = require('../aiRouter');
-const { synthesizeSpeech, VOICES, DEFAULT_VOICE } = require('../services/ttsRouter');
+const { synthesizeSpeech, synthesizeXTTS, VOICES, DEFAULT_VOICE } = require('../services/ttsRouter');
 const { run, get, all } = require('../db');
+
+const VOICES_DIR = path.join(__dirname, '..', '..', 'data', 'voices');
+if (!fs.existsSync(VOICES_DIR)) fs.mkdirSync(VOICES_DIR, { recursive: true });
 
 const LANGUAGE_INSTRUCTIONS = {
   'zh-TW': '請一律使用繁體中文（台灣用語）回覆。',
@@ -20,9 +25,20 @@ const PREVIEW_TEXT = {
   en: 'Hello! I am your AI voice assistant, happy to help you today!',
 };
 
-// GET /api/voice/voices — 可用音色清單
+// GET /api/voice/voices — 可用音色清單（含複製聲音）
 router.get('/voices', (req, res) => {
-  res.json({ voices: VOICES, default: DEFAULT_VOICE });
+  let clones = [];
+  try {
+    clones = all('SELECT * FROM voice_clones ORDER BY id DESC').map(r => ({
+      id: `clone_${r.id}`,
+      provider: 'xtts',
+      gender: 'neutral',
+      category: 'cloned',
+      dbId: r.id,
+      name: { 'zh-TW': r.name, 'zh-CN': r.name, en: r.name },
+    }));
+  } catch (_) {}
+  res.json({ voices: [...VOICES, ...clones], default: DEFAULT_VOICE });
 });
 
 // POST /api/voice/tts-preview { voice_id, language } — 試聽音色
@@ -30,7 +46,14 @@ router.post('/tts-preview', async (req, res) => {
   const { voice_id, language } = req.body;
   try {
     const text = PREVIEW_TEXT[language] || PREVIEW_TEXT['zh-TW'];
-    const buffer = await synthesizeSpeech(text, { voiceId: voice_id });
+    let buffer;
+    if (voice_id && voice_id.startsWith('clone_')) {
+      const cloneDbId = voice_id.replace('clone_', '');
+      const clone = get('SELECT * FROM voice_clones WHERE id = ?', [cloneDbId]);
+      buffer = clone ? await synthesizeXTTS(text, {}, clone.sample_path) : null;
+    } else {
+      buffer = await synthesizeSpeech(text, { voiceId: voice_id });
+    }
     if (!buffer) return res.status(502).json({ error: 'tts_unavailable' });
     res.json({ audio: buffer.toString('base64'), format: 'mp3' });
   } catch (err) {
@@ -112,8 +135,16 @@ router.post('/call/:id/turn', async (req, res) => {
       [replyText, conversationId]
     );
 
-    // TTS（失敗時 audio 為 null，前端退回瀏覽器內建語音）
-    const buffer = await synthesizeSpeech(replyText, { voiceId: voice_id });
+    // TTS（複製聲音走 XTTS，其他走 synthesizeSpeech；失敗時 audio = null 前端退回瀏覽器語音）
+    let buffer;
+    if (voice_id && voice_id.startsWith('clone_')) {
+      const cloneDbId = voice_id.replace('clone_', '');
+      const clone = get('SELECT * FROM voice_clones WHERE id = ?', [cloneDbId]);
+      buffer = clone ? await synthesizeXTTS(replyText, {}, clone.sample_path) : null;
+      if (!buffer) buffer = await synthesizeSpeech(replyText, { voiceId: 'openai-nova' });
+    } else {
+      buffer = await synthesizeSpeech(replyText, { voiceId: voice_id });
+    }
 
     res.json({
       reply: replyText,
@@ -149,6 +180,53 @@ router.post('/call/:id/end', (req, res) => {
       `UPDATE conversations SET status = 'resolved', last_message = ?, last_message_at = CURRENT_TIMESTAMP WHERE id = ?`,
       [endMsg, conversationId]
     );
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── 聲音複製 CRUD ──────────────────────────────────────────────────────────────
+
+// GET /api/voice/clones — 列出所有複製聲音
+router.get('/clones', (req, res) => {
+  try {
+    const rows = all('SELECT * FROM voice_clones ORDER BY id DESC');
+    res.json(rows.map(r => ({
+      id: `clone_${r.id}`, dbId: r.id, name: r.name, created_at: r.created_at,
+      provider: 'xtts', gender: 'neutral', category: 'cloned',
+    })));
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/voice/clone/upload { name, audio_base64, format } — 上傳聲音樣本
+router.post('/clone/upload', (req, res) => {
+  const { name, audio_base64, format } = req.body;
+  if (!name || !audio_base64) return res.status(400).json({ error: 'name and audio_base64 required' });
+  try {
+    const buf = Buffer.from(audio_base64, 'base64');
+    if (buf.length < 1000) return res.status(400).json({ error: 'audio too short' });
+    run('INSERT INTO voice_clones (name, sample_path) VALUES (?, ?)', [name.trim(), '']);
+    const row = get('SELECT * FROM voice_clones WHERE id = last_insert_rowid()');
+    const filename = `clone_${row.id}.${(format || 'wav').replace(/[^a-z0-9]/gi, '')}`;
+    const filepath = path.join(VOICES_DIR, filename);
+    fs.writeFileSync(filepath, buf);
+    run('UPDATE voice_clones SET sample_path = ? WHERE id = ?', [filepath, row.id]);
+    res.json({ id: `clone_${row.id}`, name: row.name });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// DELETE /api/voice/clone/:id — 刪除複製聲音
+router.delete('/clone/:id', (req, res) => {
+  try {
+    const row = get('SELECT * FROM voice_clones WHERE id = ?', [req.params.id]);
+    if (!row) return res.status(404).json({ error: 'not found' });
+    try { fs.unlinkSync(row.sample_path); } catch {}
+    run('DELETE FROM voice_clones WHERE id = ?', [req.params.id]);
     res.json({ success: true });
   } catch (err) {
     res.status(500).json({ error: err.message });

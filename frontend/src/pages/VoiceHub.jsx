@@ -41,13 +41,17 @@ function Toast({ message, type, onClose }) {
 
 const GENDER_ICON = { female: '👩', male: '👨', neutral: '🤖' };
 const PROVIDER_BADGE = {
-  minimax: { label: 'MiniMax', color: '#8b5cf6' },
-  openai:  { label: 'OpenAI',  color: '#10b981' },
+  minimax:   { label: 'MiniMax',   color: '#8b5cf6' },
+  openai:    { label: 'OpenAI',    color: '#10b981' },
+  cosyvoice: { label: 'CosyVoice', color: '#f59e0b' },
+  chatts:    { label: 'ChatTTS',   color: '#ec4899' },
+  xtts:      { label: 'XTTS',      color: '#3b82f6' },
+  cloned:    { label: '我的聲音',   color: '#14b8a6' },
 };
 
-function VoiceCard({ v, selected, inCall, previewing, language, t, onSelect, onPreview }) {
+function VoiceCard({ v, selected, inCall, previewing, language, t, onSelect, onPreview, onDelete }) {
   const isSelected = selected === v.id;
-  const badge = PROVIDER_BADGE[v.provider] || PROVIDER_BADGE.minimax;
+  const badge = PROVIDER_BADGE[v.provider] || PROVIDER_BADGE[v.category] || PROVIDER_BADGE.minimax;
   return (
     <div
       onClick={() => !inCall && onSelect(v.id)}
@@ -64,7 +68,9 @@ function VoiceCard({ v, selected, inCall, previewing, language, t, onSelect, onP
         transition: 'all 0.15s',
       }}
     >
-      <span style={{ fontSize: 18, flexShrink: 0 }}>{GENDER_ICON[v.gender] || '🔊'}</span>
+      <span style={{ fontSize: 18, flexShrink: 0 }}>
+        {v.category === 'cloned' ? '🎙' : (GENDER_ICON[v.gender] || '🔊')}
+      </span>
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{ fontSize: 12, fontWeight: 600, color: isSelected ? '#14b8a6' : '#e5e7eb', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
           {v.name[language] ?? v.name['zh-TW']}
@@ -91,6 +97,24 @@ function VoiceCard({ v, selected, inCall, previewing, language, t, onSelect, onP
       >
         {previewing === v.id ? '…' : '🔊'}
       </button>
+      {v.category === 'cloned' && onDelete && (
+        <button
+          onClick={e => { e.stopPropagation(); onDelete(v); }}
+          disabled={inCall}
+          style={{
+            padding: '3px 6px',
+            borderRadius: 5,
+            background: 'rgba(239,68,68,0.12)',
+            border: '1px solid rgba(239,68,68,0.3)',
+            color: '#f87171',
+            fontSize: 10,
+            cursor: inCall ? 'not-allowed' : 'pointer',
+            flexShrink: 0,
+          }}
+        >
+          🗑
+        </button>
+      )}
     </div>
   );
 }
@@ -110,6 +134,11 @@ export default function VoiceHub() {
   const [duration, setDuration] = useState(0);
   const [calls, setCalls] = useState([]);
   const [toast, setToast] = useState(null);
+  // 聲音複製
+  const [cloneFile, setCloneFile] = useState(null);
+  const [cloneName, setCloneName] = useState('');
+  const [cloneUploading, setCloneUploading] = useState(false);
+  const cloneFileRef = useRef(null);
 
   const convoIdRef = useRef(null);
   const activeRef = useRef(false);
@@ -343,6 +372,52 @@ export default function VoiceHub() {
     }
   }
 
+  // ── 聲音複製 ──────────────────────────────────────────────────────────────
+  async function uploadClone() {
+    if (!cloneFile || !cloneName.trim()) return;
+    setCloneUploading(true);
+    try {
+      const reader = new FileReader();
+      reader.onload = async (e) => {
+        try {
+          const base64 = e.target.result.split(',')[1];
+          const ext = cloneFile.name.split('.').pop().toLowerCase();
+          const res = await apiFetch('/api/voice/clone/upload', {
+            method: 'POST',
+            body: JSON.stringify({ name: cloneName.trim(), audio_base64: base64, format: ext }),
+          });
+          if (res.ok) {
+            setCloneName('');
+            setCloneFile(null);
+            if (cloneFileRef.current) cloneFileRef.current.value = '';
+            apiFetch('/api/voice/voices').then(r => r.json()).then(d => setVoices(d.voices || []));
+            setToast({ message: '聲音複製成功！', type: 'success' });
+          } else {
+            const err = await res.json().catch(() => ({}));
+            setToast({ message: err.error || '上傳失敗', type: 'error' });
+          }
+        } finally {
+          setCloneUploading(false);
+        }
+      };
+      reader.readAsDataURL(cloneFile);
+    } catch (err) {
+      setToast({ message: err.message, type: 'error' });
+      setCloneUploading(false);
+    }
+  }
+
+  async function deleteClone(voice) {
+    const dbId = voice.id.replace('clone_', '');
+    try {
+      await apiFetch(`/api/voice/clone/${dbId}`, { method: 'DELETE' });
+      setVoices(prev => prev.filter(v => v.id !== voice.id));
+      if (selectedVoice === voice.id) setSelectedVoice('female-tianmei');
+    } catch (err) {
+      setToast({ message: err.message, type: 'error' });
+    }
+  }
+
   const inCall = status !== 'idle';
   const statusText = {
     idle: t('vhStatusIdle'),
@@ -406,6 +481,83 @@ export default function VoiceHub() {
               <VoiceCard key={v.id} v={v} selected={selectedVoice} inCall={inCall} previewing={previewing}
                 language={language} t={t} onSelect={setSelectedVoice} onPreview={previewVoice} />
             ))}
+            {/* CosyVoice */}
+            {voices.filter(v => v.category === 'cosyvoice').length > 0 && (
+              <div style={{ fontSize: 10, color: '#f59e0b', letterSpacing: '0.06em', padding: '10px 2px 2px', fontWeight: 600 }}>
+                🟡 CosyVoice（阿里雲 DashScope）
+              </div>
+            )}
+            {voices.filter(v => v.category === 'cosyvoice').map(v => (
+              <VoiceCard key={v.id} v={v} selected={selectedVoice} inCall={inCall} previewing={previewing}
+                language={language} t={t} onSelect={setSelectedVoice} onPreview={previewVoice} />
+            ))}
+            {/* ChatTTS */}
+            {voices.filter(v => v.category === 'chatts').length > 0 && (
+              <div style={{ fontSize: 10, color: '#ec4899', letterSpacing: '0.06em', padding: '10px 2px 2px', fontWeight: 600 }}>
+                🩷 ChatTTS（自架本地）
+              </div>
+            )}
+            {voices.filter(v => v.category === 'chatts').map(v => (
+              <VoiceCard key={v.id} v={v} selected={selectedVoice} inCall={inCall} previewing={previewing}
+                language={language} t={t} onSelect={setSelectedVoice} onPreview={previewVoice} />
+            ))}
+            {/* XTTS */}
+            {voices.filter(v => v.category === 'xtts').length > 0 && (
+              <div style={{ fontSize: 10, color: '#3b82f6', letterSpacing: '0.06em', padding: '10px 2px 2px', fontWeight: 600 }}>
+                🔵 XTTS v2（自架本地，多語言）
+              </div>
+            )}
+            {voices.filter(v => v.category === 'xtts').map(v => (
+              <VoiceCard key={v.id} v={v} selected={selectedVoice} inCall={inCall} previewing={previewing}
+                language={language} t={t} onSelect={setSelectedVoice} onPreview={previewVoice} />
+            ))}
+            {/* 我的複製聲音 */}
+            {voices.filter(v => v.category === 'cloned').length > 0 && (
+              <div style={{ fontSize: 10, color: '#14b8a6', letterSpacing: '0.06em', padding: '10px 2px 2px', fontWeight: 600 }}>
+                🎙 我的複製聲音（XTTS 聲音克隆）
+              </div>
+            )}
+            {voices.filter(v => v.category === 'cloned').map(v => (
+              <VoiceCard key={v.id} v={v} selected={selectedVoice} inCall={inCall} previewing={previewing}
+                language={language} t={t} onSelect={setSelectedVoice} onPreview={previewVoice} onDelete={deleteClone} />
+            ))}
+            {/* 聲音複製上傳 */}
+            <div style={{ borderTop: '1px solid #2a2d3e', marginTop: 10, paddingTop: 10 }}>
+              <div style={{ fontSize: 10, color: '#6b7280', marginBottom: 6, fontWeight: 600, letterSpacing: '0.06em' }}>
+                🎤 上傳聲音樣本（10–30 秒 WAV/MP3）
+              </div>
+              <input
+                ref={cloneFileRef}
+                type="file"
+                accept=".wav,.mp3,.m4a,.ogg"
+                onChange={e => setCloneFile(e.target.files[0] || null)}
+                style={{ fontSize: 11, color: '#9ca3af', width: '100%', marginBottom: 6 }}
+              />
+              <input
+                value={cloneName}
+                onChange={e => setCloneName(e.target.value)}
+                placeholder="為這個聲音命名…"
+                style={{
+                  width: '100%', background: '#0f1117', border: '1px solid #2a2d3e',
+                  borderRadius: 6, padding: '5px 8px', color: '#f9fafb', fontSize: 11,
+                  outline: 'none', boxSizing: 'border-box', marginBottom: 6,
+                }}
+              />
+              <button
+                onClick={uploadClone}
+                disabled={!cloneFile || !cloneName.trim() || cloneUploading || inCall}
+                style={{
+                  width: '100%', padding: '6px 0', borderRadius: 6, fontSize: 11, fontWeight: 600,
+                  background: (!cloneFile || !cloneName.trim() || cloneUploading || inCall)
+                    ? '#1a1d2e' : 'rgba(20,184,166,0.15)',
+                  border: '1px solid rgba(20,184,166,0.3)',
+                  color: (!cloneFile || !cloneName.trim() || cloneUploading || inCall) ? '#4b5563' : '#14b8a6',
+                  cursor: (!cloneFile || !cloneName.trim() || cloneUploading || inCall) ? 'not-allowed' : 'pointer',
+                }}
+              >
+                {cloneUploading ? '上傳中…' : '🎙 複製我的聲音'}
+              </button>
+            </div>
           </div>
 
           <div style={{ marginTop: 8 }}>

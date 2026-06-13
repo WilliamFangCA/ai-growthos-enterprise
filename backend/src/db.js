@@ -296,6 +296,14 @@ function initTables() {
       detail_json TEXT DEFAULT '{}',
       executed_at DATETIME DEFAULT CURRENT_TIMESTAMP
     );
+
+    -- 使用者上傳的聲音複製樣本（XTTS 聲音克隆；不可被 seed 清空）
+    CREATE TABLE IF NOT EXISTS voice_clones (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      name TEXT NOT NULL,
+      sample_path TEXT NOT NULL,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
   `);
   // Migrations for existing DBs that predate these columns
   try { exec(`ALTER TABLE workflows ADD COLUMN category TEXT DEFAULT 'general'`); } catch (_) {}
