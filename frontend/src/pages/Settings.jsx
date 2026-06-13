@@ -843,16 +843,24 @@ function AccountCard({ account, colors, onChange, onDelete, platforms = MESSAGIN
   const [platformSearch, setPlatformSearch] = useState('');
   const [dropPos, setDropPos] = useState({ top: 0, left: 0 });
   const btnRef = React.useRef(null);
+  const dropRef = React.useRef(null);
 
-  // Close dropdown on any scroll or window resize
+  // Close dropdown when the PAGE scrolls (so the fixed-position dropdown doesn't
+  // drift away from the button) or on resize — but NOT when the user scrolls
+  // inside the dropdown's own list.
   React.useEffect(() => {
     if (!platformOpen) return;
-    const close = () => { setPlatformOpen(false); setPlatformSearch(''); };
-    window.addEventListener('scroll', close, true);
-    window.addEventListener('resize', close);
+    const onScroll = (e) => {
+      if (dropRef.current && dropRef.current.contains(e.target)) return;
+      setPlatformOpen(false);
+      setPlatformSearch('');
+    };
+    const onResize = () => { setPlatformOpen(false); setPlatformSearch(''); };
+    window.addEventListener('scroll', onScroll, true);
+    window.addEventListener('resize', onResize);
     return () => {
-      window.removeEventListener('scroll', close, true);
-      window.removeEventListener('resize', close);
+      window.removeEventListener('scroll', onScroll, true);
+      window.removeEventListener('resize', onResize);
     };
   }, [platformOpen]);
 
@@ -936,7 +944,7 @@ function AccountCard({ account, colors, onChange, onDelete, platforms = MESSAGIN
               </svg>
             </button>
             {platformOpen && (
-              <div style={{
+              <div ref={dropRef} style={{
                 position: 'fixed', top: dropPos.top, left: dropPos.left, zIndex: 9999,
                 background: colors.card,
                 border: `1px solid ${colors.border}`,
