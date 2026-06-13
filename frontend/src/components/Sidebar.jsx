@@ -28,6 +28,7 @@ const NAV_SECTIONS = [
   {
     labelKey: 'sales',
     items: [
+      { to: '/app/products',   labelKey: 'products',   icon: '🛍️' },
       { to: '/app/orders',     labelKey: 'orders',     icon: '📦', badgeKey: 'pendingOrders' },
       { to: '/app/crm',        labelKey: 'crm',        icon: '👥' },
       { to: '/app/membership', labelKey: 'membership', icon: '👑' },

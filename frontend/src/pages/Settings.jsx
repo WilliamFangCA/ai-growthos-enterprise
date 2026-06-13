@@ -177,64 +177,30 @@ const MESSAGING_PLATFORMS = [
 
 // ─── Ecommerce Platform Config ───────────────────────────────────────────────
 
+function apiKeysPlatform(id, name, icon, color, keyLabel, secretLabel, keyFieldKey = 'app_key', secretFieldKey = 'app_secret') {
+  return {
+    id, name, icon, color,
+    auth_types: [
+      {
+        type: 'api_keys', label: `${keyLabel} + ${secretLabel}`,
+        fields: [
+          { key: keyFieldKey,    label: keyLabel,    type: 'text' },
+          { key: secretFieldKey, label: secretLabel, type: 'password' },
+        ],
+      },
+      {
+        type: 'credentials', label: '帳號密碼登入',
+        fields: [
+          { key: 'username', label: '帳號 / Email', type: 'text' },
+          { key: 'password', label: '密碼',         type: 'password' },
+        ],
+      },
+    ],
+  };
+}
+
 const ECOMMERCE_PLATFORMS = [
-  {
-    id: 'shopee', name: 'Shopee', icon: '🛒', color: '#EE4D2D',
-    auth_types: [
-      {
-        type: 'api_keys', label: 'Partner ID + Key',
-        fields: [
-          { key: 'partner_id',  label: 'Partner ID',  type: 'text' },
-          { key: 'partner_key', label: 'Partner Key', type: 'password' },
-        ],
-      },
-      {
-        type: 'credentials', label: '帳號密碼登入',
-        fields: [
-          { key: 'username', label: '帳號 / Email', type: 'text' },
-          { key: 'password', label: '密碼',         type: 'password' },
-        ],
-      },
-    ],
-  },
-  {
-    id: 'lazada', name: 'Lazada', icon: '🟣', color: '#0F146D',
-    auth_types: [
-      {
-        type: 'api_keys', label: 'App Key + Secret',
-        fields: [
-          { key: 'app_key',    label: 'App Key',    type: 'text' },
-          { key: 'app_secret', label: 'App Secret', type: 'password' },
-        ],
-      },
-      {
-        type: 'credentials', label: '帳號密碼登入',
-        fields: [
-          { key: 'username', label: '帳號 / Email', type: 'text' },
-          { key: 'password', label: '密碼',         type: 'password' },
-        ],
-      },
-    ],
-  },
-  {
-    id: 'shopify', name: 'Shopify', icon: '🏪', color: '#96BF48',
-    auth_types: [
-      {
-        type: 'api_keys', label: 'Store URL + Admin Token',
-        fields: [
-          { key: 'store_url',   label: 'Store URL',   type: 'text',     placeholder: 'mystore.myshopify.com' },
-          { key: 'admin_token', label: 'Admin Token', type: 'password', placeholder: 'shpat_...' },
-        ],
-      },
-      {
-        type: 'credentials', label: '帳號密碼登入',
-        fields: [
-          { key: 'username', label: '帳號 / Email', type: 'text' },
-          { key: 'password', label: '密碼',         type: 'password' },
-        ],
-      },
-    ],
-  },
+  // ── Americas ────────────────────────────────────────────────────────────────
   {
     id: 'amazon', name: 'Amazon', icon: '📦', color: '#FF9900',
     auth_types: [
@@ -255,13 +221,324 @@ const ECOMMERCE_PLATFORMS = [
     ],
   },
   {
-    id: 'tiktok_shop', name: 'TikTok Shop', icon: '🎵', color: '#010101',
+    id: 'ebay', name: 'eBay', icon: '🔵', color: '#0064D2',
     auth_types: [
       {
-        type: 'api_keys', label: 'App Key + Secret',
+        type: 'api_keys', label: 'App ID + Cert ID',
+        fields: [
+          { key: 'app_id',  label: 'App ID',  type: 'text' },
+          { key: 'cert_id', label: 'Cert ID', type: 'password' },
+          { key: 'dev_id',  label: 'Dev ID',  type: 'text' },
+        ],
+      },
+      {
+        type: 'credentials', label: '帳號密碼登入',
+        fields: [
+          { key: 'username', label: '帳號 / Email', type: 'text' },
+          { key: 'password', label: '密碼',         type: 'password' },
+        ],
+      },
+    ],
+  },
+  apiKeysPlatform('walmart',     'Walmart Marketplace', '🔵', '#0071CE', 'Client ID',  'Client Secret', 'client_id', 'client_secret'),
+  apiKeysPlatform('etsy',        'Etsy',                '🧡', '#F1641E', 'API Key',    'API Secret'),
+  {
+    id: 'target', name: 'Target Plus', icon: '🎯', color: '#CC0000',
+    auth_types: [
+      {
+        type: 'credentials', label: '帳號密碼登入',
+        fields: [
+          { key: 'username', label: '帳號 / Email', type: 'text' },
+          { key: 'password', label: '密碼',         type: 'password' },
+        ],
+      },
+    ],
+  },
+  {
+    id: 'newegg', name: 'Newegg', icon: '🔶', color: '#FF8000',
+    auth_types: [
+      {
+        type: 'api_keys', label: 'Seller ID + API Key',
+        fields: [
+          { key: 'seller_id', label: 'Seller ID', type: 'text' },
+          { key: 'api_key',   label: 'API Key',   type: 'password' },
+        ],
+      },
+      {
+        type: 'credentials', label: '帳號密碼登入',
+        fields: [
+          { key: 'username', label: '帳號 / Email', type: 'text' },
+          { key: 'password', label: '密碼',         type: 'password' },
+        ],
+      },
+    ],
+  },
+  {
+    id: 'wayfair', name: 'Wayfair', icon: '🏠', color: '#7B189F',
+    auth_types: [
+      {
+        type: 'api_keys', label: 'Supplier ID + API Key',
+        fields: [
+          { key: 'supplier_id', label: 'Supplier ID', type: 'text' },
+          { key: 'api_key',     label: 'API Key',     type: 'password' },
+        ],
+      },
+      {
+        type: 'credentials', label: '帳號密碼登入',
+        fields: [
+          { key: 'username', label: '帳號 / Email', type: 'text' },
+          { key: 'password', label: '密碼',         type: 'password' },
+        ],
+      },
+    ],
+  },
+  {
+    id: 'bestbuy', name: 'Best Buy Marketplace', icon: '💛', color: '#003591',
+    auth_types: [
+      {
+        type: 'api_keys', label: 'App ID + API Key',
+        fields: [
+          { key: 'app_id',  label: 'App ID',  type: 'text' },
+          { key: 'api_key', label: 'API Key', type: 'password' },
+        ],
+      },
+      {
+        type: 'credentials', label: '帳號密碼登入',
+        fields: [
+          { key: 'username', label: '帳號 / Email', type: 'text' },
+          { key: 'password', label: '密碼',         type: 'password' },
+        ],
+      },
+    ],
+  },
+  apiKeysPlatform('mercado_libre', 'Mercado Libre', '🟡', '#FFE600', 'App ID', 'App Secret', 'app_id', 'app_secret'),
+
+  // ── Southeast Asia ───────────────────────────────────────────────────────────
+  {
+    id: 'shopee', name: 'Shopee', icon: '🛒', color: '#EE4D2D',
+    auth_types: [
+      {
+        type: 'api_keys', label: 'Partner ID + Key',
+        fields: [
+          { key: 'partner_id',  label: 'Partner ID',  type: 'text' },
+          { key: 'partner_key', label: 'Partner Key', type: 'password' },
+        ],
+      },
+      {
+        type: 'credentials', label: '帳號密碼登入',
+        fields: [
+          { key: 'username', label: '帳號 / Email', type: 'text' },
+          { key: 'password', label: '密碼',         type: 'password' },
+        ],
+      },
+    ],
+  },
+  apiKeysPlatform('lazada',    'Lazada',    '🟣', '#0F146D', 'App Key', 'App Secret'),
+  apiKeysPlatform('tokopedia', 'Tokopedia', '🟢', '#42B549', 'Client ID', 'Client Secret', 'client_id', 'client_secret'),
+  {
+    id: 'qoo10', name: 'Qoo10', icon: '🔴', color: '#E31837',
+    auth_types: [
+      {
+        type: 'api_keys', label: 'App ID + Secret Key',
+        fields: [
+          { key: 'app_id',     label: 'App ID',     type: 'text' },
+          { key: 'secret_key', label: 'Secret Key', type: 'password' },
+        ],
+      },
+      {
+        type: 'credentials', label: '帳號密碼登入',
+        fields: [
+          { key: 'username', label: '帳號 / Email', type: 'text' },
+          { key: 'password', label: '密碼',         type: 'password' },
+        ],
+      },
+    ],
+  },
+
+  // ── China ────────────────────────────────────────────────────────────────────
+  apiKeysPlatform('pinduoduo', 'Pinduoduo 拼多多',    '🛍️', '#E02020', 'App Key', 'App Secret'),
+  {
+    id: 'tiktok_shop', name: 'Douyin / TikTok Shop', icon: '🎵', color: '#010101',
+    auth_types: [
+      {
+        type: 'api_keys', label: 'App Key + App Secret',
         fields: [
           { key: 'app_key',    label: 'App Key',    type: 'text' },
           { key: 'app_secret', label: 'App Secret', type: 'password' },
+        ],
+      },
+      {
+        type: 'credentials', label: '帳號密碼登入',
+        fields: [
+          { key: 'username', label: '帳號 / Email', type: 'text' },
+          { key: 'password', label: '密碼',         type: 'password' },
+        ],
+      },
+    ],
+  },
+  apiKeysPlatform('taobao',     '淘寶 Taobao',    '🛒', '#FF6600', 'App Key', 'App Secret'),
+  apiKeysPlatform('tmall',      '天貓 Tmall',     '🏪', '#FF0000', 'App Key', 'App Secret'),
+  apiKeysPlatform('jd',         '京東 JD.com',    '🏬', '#C0000C', 'App Key', 'App Secret'),
+  apiKeysPlatform('alibaba',    'Alibaba.com',    '🌐', '#FF6A00', 'App Key', 'App Secret'),
+  apiKeysPlatform('temu',       'Temu',           '🧡', '#FF6900', 'App Key', 'App Secret'),
+  apiKeysPlatform('aliexpress', 'AliExpress',     '🟠', '#E43226', 'App Key', 'App Secret'),
+  {
+    id: 'shein', name: 'SHEIN Marketplace', icon: '⚫', color: '#222222',
+    auth_types: [
+      {
+        type: 'api_keys', label: 'App Key + App Secret',
+        fields: [
+          { key: 'app_key',    label: 'App Key',    type: 'text' },
+          { key: 'app_secret', label: 'App Secret', type: 'password' },
+        ],
+      },
+      {
+        type: 'credentials', label: '帳號密碼登入',
+        fields: [
+          { key: 'username', label: '帳號 / Email', type: 'text' },
+          { key: 'password', label: '密碼',         type: 'password' },
+        ],
+      },
+    ],
+  },
+
+  // ── India ────────────────────────────────────────────────────────────────────
+  apiKeysPlatform('flipkart', 'Flipkart',  '💛', '#F7DB15', 'App ID',    'App Secret', 'app_id',    'app_secret'),
+  {
+    id: 'meesho', name: 'Meesho', icon: '🟣', color: '#9B5CF6',
+    auth_types: [
+      {
+        type: 'credentials', label: '帳號密碼登入',
+        fields: [
+          { key: 'username', label: '帳號 / Email', type: 'text' },
+          { key: 'password', label: '密碼',         type: 'password' },
+        ],
+      },
+    ],
+  },
+
+  // ── Japan ────────────────────────────────────────────────────────────────────
+  {
+    id: 'rakuten', name: 'Rakuten 樂天', icon: '🔴', color: '#BF0000',
+    auth_types: [
+      {
+        type: 'api_keys', label: 'Service Secret + License Key',
+        fields: [
+          { key: 'service_secret', label: 'Service Secret', type: 'password' },
+          { key: 'license_key',    label: 'License Key',    type: 'text' },
+        ],
+      },
+      {
+        type: 'credentials', label: '帳號密碼登入',
+        fields: [
+          { key: 'username', label: '帳號 / Email', type: 'text' },
+          { key: 'password', label: '密碼',         type: 'password' },
+        ],
+      },
+    ],
+  },
+  apiKeysPlatform('yahoo_japan', 'Yahoo Shopping JP', '🔴', '#FF0033', 'App ID', 'Secret Key', 'app_id', 'secret_key'),
+
+  // ── Korea ─────────────────────────────────────────────────────────────────────
+  {
+    id: 'coupang', name: 'Coupang', icon: '🟠', color: '#EF6B00',
+    auth_types: [
+      {
+        type: 'api_keys', label: 'Access Key + Secret Key',
+        fields: [
+          { key: 'access_key', label: 'Access Key', type: 'text' },
+          { key: 'secret_key', label: 'Secret Key', type: 'password' },
+        ],
+      },
+      {
+        type: 'credentials', label: '帳號密碼登入',
+        fields: [
+          { key: 'username', label: '帳號 / Email', type: 'text' },
+          { key: 'password', label: '密碼',         type: 'password' },
+        ],
+      },
+    ],
+  },
+  apiKeysPlatform('naver',    'Naver Shopping', '🟢', '#03C75A', 'Client ID', 'Client Secret', 'client_id', 'client_secret'),
+  apiKeysPlatform('gmarket',  'Gmarket',        '🟡', '#FFCC00', 'App Key',   'App Secret'),
+  apiKeysPlatform('eleventh', '11st',           '🔴', '#E60012', 'App Key',   'App Secret'),
+
+  // ── Europe ───────────────────────────────────────────────────────────────────
+  apiKeysPlatform('otto',       'OTTO',                '🟤', '#F25B00', 'Client ID', 'Client Secret', 'client_id', 'client_secret'),
+  apiKeysPlatform('otto_market','Otto Market',         '🟤', '#F25B00', 'Client ID', 'Client Secret', 'client_id', 'client_secret'),
+  apiKeysPlatform('allegro',    'Allegro',             '🟠', '#FF6B00', 'Client ID', 'Client Secret', 'client_id', 'client_secret'),
+  apiKeysPlatform('bol',        'Bol.com',             '🔵', '#0B5CA8', 'Client ID', 'Client Secret', 'client_id', 'client_secret'),
+  apiKeysPlatform('zalando',    'Zalando',             '🟠', '#F27806', 'Client ID', 'Client Secret', 'client_id', 'client_secret'),
+  {
+    id: 'cdiscount', name: 'Cdiscount', icon: '🔵', color: '#0054A6',
+    auth_types: [
+      {
+        type: 'api_keys', label: 'App Login + Password',
+        fields: [
+          { key: 'app_login',    label: 'App Login',    type: 'text' },
+          { key: 'app_password', label: 'App Password', type: 'password' },
+        ],
+      },
+      {
+        type: 'credentials', label: '帳號密碼登入',
+        fields: [
+          { key: 'username', label: '帳號 / Email', type: 'text' },
+          { key: 'password', label: '密碼',         type: 'password' },
+        ],
+      },
+    ],
+  },
+  apiKeysPlatform('fnac',      'Fnac Darty',            '🟢', '#008F5D', 'App Key', 'App Secret'),
+  apiKeysPlatform('carrefour', 'Carrefour Marketplace', '🔵', '#0067B2', 'Client ID', 'Client Secret', 'client_id', 'client_secret'),
+
+  // ── Russia ───────────────────────────────────────────────────────────────────
+  {
+    id: 'ozon', name: 'Ozon', icon: '🔵', color: '#005BFF',
+    auth_types: [
+      {
+        type: 'api_keys', label: 'Client ID + API Key',
+        fields: [
+          { key: 'client_id', label: 'Client ID', type: 'text' },
+          { key: 'api_key',   label: 'API Key',   type: 'password' },
+        ],
+      },
+      {
+        type: 'credentials', label: '帳號密碼登入',
+        fields: [
+          { key: 'username', label: '帳號 / Email', type: 'text' },
+          { key: 'password', label: '密碼',         type: 'password' },
+        ],
+      },
+    ],
+  },
+  {
+    id: 'wildberries', name: 'Wildberries', icon: '🟣', color: '#CB11AB',
+    auth_types: [
+      {
+        type: 'api_keys', label: 'API Key',
+        fields: [
+          { key: 'api_key', label: 'API Key', type: 'password' },
+        ],
+      },
+      {
+        type: 'credentials', label: '帳號密碼登入',
+        fields: [
+          { key: 'username', label: '帳號 / Email', type: 'text' },
+          { key: 'password', label: '密碼',         type: 'password' },
+        ],
+      },
+    ],
+  },
+
+  // ── Other / Self-hosted ───────────────────────────────────────────────────────
+  {
+    id: 'shopify', name: 'Shopify', icon: '🏪', color: '#96BF48',
+    auth_types: [
+      {
+        type: 'api_keys', label: 'Store URL + Admin Token',
+        fields: [
+          { key: 'store_url',   label: 'Store URL',   type: 'text',     placeholder: 'mystore.myshopify.com' },
+          { key: 'admin_token', label: 'Admin Token', type: 'password', placeholder: 'shpat_...' },
         ],
       },
       {

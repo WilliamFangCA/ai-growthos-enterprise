@@ -16,12 +16,59 @@ const STATUS_META = {
 };
 
 const PLATFORM_META = {
-  shopify: { label: 'Shopify',  icon: '🛍️', color: 'text-green-600' },
-  amazon:  { label: 'Amazon',   icon: '📦', color: 'text-orange-600' },
-  shopee:  { label: 'Shopee',   icon: '🛒', color: 'text-red-600' },
-  tiktok:  { label: 'TikTok',   icon: '🎵', color: 'text-pink-600' },
-  jd:      { label: 'JD.com',   icon: '🏪', color: 'text-red-600' },
-  custom:  { label: '自建商城', icon: '🏬', color: 'text-blue-600' },
+  // Americas
+  amazon:        { label: 'Amazon',             icon: '📦', color: 'text-orange-500' },
+  ebay:          { label: 'eBay',               icon: '🔵', color: 'text-blue-600' },
+  walmart:       { label: 'Walmart',            icon: '🔵', color: 'text-blue-700' },
+  etsy:          { label: 'Etsy',               icon: '🧡', color: 'text-orange-500' },
+  target:        { label: 'Target Plus',        icon: '🎯', color: 'text-red-600' },
+  newegg:        { label: 'Newegg',             icon: '🔶', color: 'text-orange-600' },
+  wayfair:       { label: 'Wayfair',            icon: '🏠', color: 'text-purple-600' },
+  bestbuy:       { label: 'Best Buy',           icon: '💛', color: 'text-blue-800' },
+  mercado_libre: { label: 'Mercado Libre',      icon: '🟡', color: 'text-yellow-600' },
+  // Southeast Asia
+  shopee:        { label: 'Shopee',             icon: '🛒', color: 'text-red-500' },
+  lazada:        { label: 'Lazada',             icon: '🟣', color: 'text-indigo-700' },
+  tokopedia:     { label: 'Tokopedia',          icon: '🟢', color: 'text-green-600' },
+  qoo10:         { label: 'Qoo10',              icon: '🔴', color: 'text-red-600' },
+  // China
+  pinduoduo:     { label: '拼多多',             icon: '🛍️', color: 'text-red-600' },
+  tiktok_shop:   { label: 'Douyin/TikTok Shop', icon: '🎵', color: 'text-pink-600' },
+  taobao:        { label: '淘寶',               icon: '🛒', color: 'text-orange-600' },
+  tmall:         { label: '天貓',               icon: '🏪', color: 'text-red-600' },
+  jd:            { label: '京東',               icon: '🏬', color: 'text-red-700' },
+  alibaba:       { label: 'Alibaba.com',        icon: '🌐', color: 'text-orange-500' },
+  temu:          { label: 'Temu',               icon: '🧡', color: 'text-orange-500' },
+  aliexpress:    { label: 'AliExpress',         icon: '🟠', color: 'text-red-500' },
+  shein:         { label: 'SHEIN',              icon: '⚫', color: 'text-gray-800' },
+  // India
+  flipkart:      { label: 'Flipkart',           icon: '💛', color: 'text-yellow-500' },
+  meesho:        { label: 'Meesho',             icon: '🟣', color: 'text-purple-500' },
+  // Japan
+  rakuten:       { label: 'Rakuten',            icon: '🔴', color: 'text-red-700' },
+  yahoo_japan:   { label: 'Yahoo Shopping JP',  icon: '🔴', color: 'text-red-600' },
+  // Korea
+  coupang:       { label: 'Coupang',            icon: '🟠', color: 'text-orange-600' },
+  naver:         { label: 'Naver Shopping',     icon: '🟢', color: 'text-green-500' },
+  gmarket:       { label: 'Gmarket',            icon: '🟡', color: 'text-yellow-600' },
+  eleventh:      { label: '11st',               icon: '🔴', color: 'text-red-600' },
+  // Europe
+  otto:          { label: 'OTTO',               icon: '🟤', color: 'text-orange-600' },
+  otto_market:   { label: 'Otto Market',        icon: '🟤', color: 'text-orange-600' },
+  allegro:       { label: 'Allegro',            icon: '🟠', color: 'text-orange-500' },
+  bol:           { label: 'Bol.com',            icon: '🔵', color: 'text-blue-600' },
+  zalando:       { label: 'Zalando',            icon: '🟠', color: 'text-orange-500' },
+  cdiscount:     { label: 'Cdiscount',          icon: '🔵', color: 'text-blue-700' },
+  fnac:          { label: 'Fnac Darty',         icon: '🟢', color: 'text-green-700' },
+  carrefour:     { label: 'Carrefour',          icon: '🔵', color: 'text-blue-600' },
+  // Russia
+  ozon:          { label: 'Ozon',               icon: '🔵', color: 'text-blue-600' },
+  wildberries:   { label: 'Wildberries',        icon: '🟣', color: 'text-purple-600' },
+  // Other
+  shopify:       { label: 'Shopify',            icon: '🛍️', color: 'text-green-600' },
+  momo:          { label: 'Momo 購物',          icon: '🔴', color: 'text-red-600' },
+  pchome:        { label: 'PChome',             icon: '🖥️', color: 'text-red-600' },
+  custom:        { label: '自建商城',           icon: '🏬', color: 'text-blue-600' },
 };
 
 const STATUS_FLOW = ['pending','paid','processing','shipped','in_transit','delivered','completed'];

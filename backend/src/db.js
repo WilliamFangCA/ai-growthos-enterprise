@@ -195,6 +195,43 @@ function initTables() {
       sent_at DATETIME DEFAULT CURRENT_TIMESTAMP
     );
 
+    CREATE TABLE IF NOT EXISTS product_listings (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      tenant_id TEXT NOT NULL DEFAULT 'demo',
+      title TEXT NOT NULL,
+      description TEXT DEFAULT '',
+      price REAL NOT NULL DEFAULT 0,
+      compare_price REAL DEFAULT 0,
+      currency TEXT DEFAULT 'TWD',
+      sku TEXT DEFAULT '',
+      stock INTEGER DEFAULT 0,
+      category TEXT DEFAULT '',
+      images_json TEXT DEFAULT '[]',
+      tags TEXT DEFAULT '',
+      status TEXT DEFAULT 'draft',
+      platforms_json TEXT DEFAULT '[]',
+      publish_status_json TEXT DEFAULT '{}',
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+
+    CREATE TABLE IF NOT EXISTS platform_messages (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      tenant_id TEXT NOT NULL DEFAULT 'demo',
+      platform TEXT NOT NULL,
+      platform_account_id TEXT,
+      external_conversation_id TEXT,
+      buyer_name TEXT,
+      buyer_id TEXT,
+      direction TEXT DEFAULT 'inbound',
+      content TEXT NOT NULL,
+      message_type TEXT DEFAULT 'text',
+      is_read INTEGER DEFAULT 0,
+      order_id TEXT,
+      sent_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+
     CREATE TABLE IF NOT EXISTS members (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       tenant_id TEXT NOT NULL DEFAULT 'demo',
@@ -313,6 +350,15 @@ function initTables() {
       knowledge_base_path TEXT DEFAULT '',
       knowledge_base_name TEXT DEFAULT '',
       updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+
+    -- 全局知識庫文件（跨所有 AI 功能共享；不可被 seed 清空）
+    CREATE TABLE IF NOT EXISTS global_kb (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      name TEXT NOT NULL,
+      filepath TEXT NOT NULL,
+      char_count INTEGER DEFAULT 0,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
     );
   `);
   // Migrations for existing DBs that predate these columns

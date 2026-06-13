@@ -59,6 +59,8 @@ const membersRouter = require('./routes/members');
 const toolsRouter = require('./routes/tools');
 const voiceRouter = require('./routes/voice');
 const hubSettingsRouter = require('./routes/hub-settings');
+const globalKbRouter = require('./routes/global-kb');
+const productListingsRouter = require('./routes/product-listings');
 
 // Dashboard and analytics are read-only stats — optionalAuth so the sidebar can poll without a token
 app.use('/api/dashboard', optionalAuth, dashboardRouter);
@@ -76,6 +78,8 @@ app.use('/api/members', requireAuth, membersRouter);
 app.use('/api/tools', requireAuth, toolsRouter);
 app.use('/api/voice', optionalAuth, voiceRouter);
 app.use('/api/hub-settings', requireAuth, hubSettingsRouter);
+app.use('/api/global-kb', requireAuth, globalKbRouter);
+app.use('/api/product-listings', requireAuth, productListingsRouter);
 
 // 生成的媒體檔（圖片/影片/音樂）— 由 routes/content.js 寫入 backend/data/media
 const mediaDir = path.join(__dirname, '..', 'data', 'media');
@@ -85,8 +89,21 @@ app.use('/media', express.static(mediaDir, { maxAge: '7d' }));
 // Serve frontend build if dist exists (works in any NODE_ENV)
 const frontendBuild = path.join(__dirname, '..', '..', 'frontend', 'dist');
 if (fs.existsSync(frontendBuild)) {
-  app.use(express.static(frontendBuild));
+  // Hashed assets (JS/CSS with content hash in filename) can be cached forever.
+  // index.html must NEVER be cached so browsers always fetch the latest bundle references.
+  app.use(express.static(frontendBuild, {
+    setHeaders(res, filePath) {
+      if (filePath.endsWith('index.html')) {
+        res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+        res.setHeader('Pragma', 'no-cache');
+        res.setHeader('Expires', '0');
+      }
+    },
+  }));
   app.get('*', (req, res) => {
+    res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+    res.setHeader('Pragma', 'no-cache');
+    res.setHeader('Expires', '0');
     res.sendFile(path.join(frontendBuild, 'index.html'));
   });
 }

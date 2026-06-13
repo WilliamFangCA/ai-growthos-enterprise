@@ -20,6 +20,7 @@ import Settings from './pages/Settings.jsx';
 import Membership from './pages/Membership.jsx';
 import Toolbox from './pages/Toolbox.jsx';
 import VoiceHub from './pages/VoiceHub.jsx';
+import ProductListings from './pages/ProductListings.jsx';
 
 // React Flow 編輯器較大，獨立 chunk 延遲載入
 const WorkflowBuilder = React.lazy(() => import('./pages/WorkflowBuilder.jsx'));
@@ -47,6 +48,7 @@ function AppRoutes() {
       <Route path="comms" element={<CommHub />} />
       <Route path="voice" element={<VoiceHub />} />
       <Route path="orders" element={<Orders />} />
+      <Route path="products" element={<ProductListings />} />
       <Route path="ai-rules" element={<AIRules />} />
       <Route path="marketing" element={<Marketing />} />
       <Route path="membership" element={<Membership />} />
@@ -92,6 +94,7 @@ export default function App() {
       <Route path="/workflows" element={<Navigate to="/app/workflows" replace />} />
       <Route path="/comms" element={<Navigate to="/app/comms" replace />} />
       <Route path="/orders" element={<Navigate to="/app/orders" replace />} />
+      <Route path="/products" element={<Navigate to="/app/products" replace />} />
       <Route path="/ai-rules" element={<Navigate to="/app/ai-rules" replace />} />
       <Route path="/marketing" element={<Navigate to="/app/marketing" replace />} />
       <Route path="/analytics" element={<Navigate to="/app/analytics" replace />} />

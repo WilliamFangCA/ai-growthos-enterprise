@@ -5,7 +5,22 @@ import {
 } from 'recharts';
 
 const PLATFORM_COLORS = {
-  shopify: '#96bf48', amazon: '#ff9900', shopee: '#f96022', tiktok: '#010101',
+  // E-commerce
+  amazon: '#ff9900', ebay: '#0064d2', walmart: '#0071ce', etsy: '#f1641e',
+  target: '#cc0000', newegg: '#ff8000', wayfair: '#7b189f', bestbuy: '#003591',
+  mercado_libre: '#ffe600',
+  shopee: '#f96022', lazada: '#0f146d', tokopedia: '#42b549', qoo10: '#e31837',
+  pinduoduo: '#e02020', tiktok_shop: '#010101', taobao: '#ff6600', tmall: '#ff0000',
+  jd: '#c0000c', alibaba: '#ff6a00', temu: '#ff6900', aliexpress: '#e43226',
+  shein: '#444444',
+  flipkart: '#f7db15', meesho: '#9b5cf6',
+  rakuten: '#bf0000', yahoo_japan: '#ff0033',
+  coupang: '#ef6b00', naver: '#03c75a', gmarket: '#ffcc00', eleventh: '#e60012',
+  otto: '#f25b00', otto_market: '#f25b00', allegro: '#ff6b00', bol: '#0b5ca8',
+  zalando: '#f27806', cdiscount: '#0054a6', fnac: '#008f5d', carrefour: '#0067b2',
+  ozon: '#005bff', wildberries: '#cb11ab',
+  shopify: '#96bf48', momo: '#d61f3f', pchome: '#cc0000',
+  // Messaging
   line: '#00c300', whatsapp: '#25d366', telegram: '#229ed9', email: '#ea4335',
 };
 
