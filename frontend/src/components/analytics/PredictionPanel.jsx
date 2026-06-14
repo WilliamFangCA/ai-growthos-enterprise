@@ -66,7 +66,28 @@ export default function PredictionPanel() {
   const [showForm, setShowForm] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [form, setForm] = useState({ topic: '', materials: '', agentCount: 8, rounds: 2, variables: '' });
+  const [files, setFiles] = useState([]);
+  const [fileBusy, setFileBusy] = useState(false);
+  const fileInputRef = useRef(null);
   const pollRef = useRef(null);
+
+  const onPickFiles = async (e) => {
+    const picked = Array.from(e.target.files || []);
+    e.target.value = '';
+    if (!picked.length) return;
+    setFileBusy(true);
+    for (const f of picked) {
+      try { const p = await processFile(f); setFiles(prev => [...prev, p]); } catch (_) {}
+    }
+    setFileBusy(false);
+  };
+  const removeFile = (i) => setFiles(prev => prev.filter((_, idx) => idx !== i));
+
+  const fillExample = () => setForm({
+    topic: '台灣加權指數 2026 高點與轉折點預估',
+    materials: 'AI 伺服器與半導體拉貨能見度高、外資回補科技權值、Fed 降息預期升溫、新台幣偏強、出口連續成長；高基期與美國大選為下半年變數。',
+    agentCount: 5, rounds: 2, variables: 'Fed 如期降息, AI 拉貨延續',
+  });
 
   const loadList = useCallback(async () => {
     try {
@@ -108,20 +129,42 @@ export default function PredictionPanel() {
     if (!form.topic.trim() || submitting) return;
     setSubmitting(true);
     try {
+      // 整合多模態附件：文件→文字、圖片→視覺、音訊/影片→佐證清單
+      const docParts = [], mediaParts = [], images = [], attachments = [];
+      for (const f of files) {
+        if (f.type === 'image') {
+          images.push({ base64: f.base64, mimeType: f.mimeType });
+          attachments.push({ name: f.name, kind: 'image' });
+        } else if (f.type === 'audio' || f.type === 'video') {
+          const dur = f.duration ? `${Math.floor(f.duration / 60)}分${f.duration % 60}秒` : '';
+          mediaParts.push(`• ${f.name}（${f.type === 'audio' ? '音訊' : '影片'}${dur ? `，${dur}` : ''}，${formatFileSize(f.size)}）`);
+          attachments.push({ name: f.name, kind: f.type, note: dur });
+        } else {
+          docParts.push(`--- ${f.name} ---\n${f.text || ''}`);
+          attachments.push({ name: f.name, kind: f.type });
+        }
+      }
+      let materials = form.materials.trim();
+      if (docParts.length) materials += `\n\n【附加文件內容】\n${docParts.join('\n\n')}`;
+      if (mediaParts.length) materials += `\n\n【附加影音材料（佐證）】\n${mediaParts.join('\n')}`;
+
       const body = {
         topic: form.topic.trim(),
-        materials: form.materials.trim(),
+        materials: materials.trim(),
         agentCount: Number(form.agentCount) || 8,
         rounds: Number(form.rounds) || 2,
         variables: form.variables.split(/[,，\n]/).map(s => s.trim()).filter(Boolean),
         model: selectedModel || 'glm-5-turbo',
         language: 'zh-TW',
+        images,
+        attachments,
       };
       const r = await apiFetch('/api/predictions', { method: 'POST', body: JSON.stringify(body) });
       const created = await r.json();
       if (created && created.id) {
         setShowForm(false);
         setForm({ topic: '', materials: '', agentCount: 8, rounds: 2, variables: '' });
+        setFiles([]);
         await loadList();
         setSelectedId(created.id);
         setDetail(null);
@@ -156,6 +199,12 @@ export default function PredictionPanel() {
 
         {showForm && (
           <div style={{ background: COL.inner, border: `1px solid ${COL.border}`, borderRadius: 10, padding: 12, marginBottom: 12 }}>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 4 }}>
+              <button onClick={fillExample} style={{
+                fontSize: 11, color: COL.accent, background: 'transparent', border: `1px solid ${COL.border}`,
+                borderRadius: 6, padding: '3px 8px', cursor: 'pointer',
+              }}>📈 範例：台股高點與轉折</button>
+            </div>
             <Field label="預測主題 *">
               <input value={form.topic} onChange={e => setForm({ ...form, topic: e.target.value })}
                 placeholder="例：2026 台灣電動車市場滲透率" style={inputStyle} />
@@ -163,6 +212,29 @@ export default function PredictionPanel() {
             <Field label="背景材料（新聞、政策、訊號…）">
               <textarea value={form.materials} onChange={e => setForm({ ...form, materials: e.target.value })}
                 rows={3} placeholder="貼上相關資料，AI 會從中萃取種子" style={{ ...inputStyle, resize: 'vertical' }} />
+            </Field>
+            <Field label="背景材料檔案（文件 / 圖片 / 音訊 / 影片，可多選）">
+              <input ref={fileInputRef} type="file" multiple onChange={onPickFiles}
+                accept=".pdf,.doc,.docx,.txt,.md,.csv,.json,image/*,audio/*,video/*" style={{ display: 'none' }} />
+              <button onClick={() => fileInputRef.current && fileInputRef.current.click()} disabled={fileBusy} style={{
+                width: '100%', padding: '8px', borderRadius: 8, cursor: 'pointer', fontSize: 12,
+                color: COL.text, background: '#0b0d14', border: `1px dashed ${COL.border}`,
+              }}>{fileBusy ? '處理中…' : '＋ 選擇檔案上傳'}</button>
+              {files.length > 0 && (
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 8 }}>
+                  {files.map((f, i) => (
+                    <span key={i} style={{
+                      display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 11, color: COL.text,
+                      background: COL.inner, border: `1px solid ${COL.border}`, borderRadius: 999, padding: '3px 9px',
+                    }}>
+                      {FILE_ICON[f.type] || '📎'} {f.name.length > 18 ? f.name.slice(0, 16) + '…' : f.name}
+                      <span style={{ color: COL.faint }}>{formatFileSize(f.size)}</span>
+                      <span onClick={() => removeFile(i)} style={{ cursor: 'pointer', color: COL.faint, marginLeft: 2 }}>✕</span>
+                    </span>
+                  ))}
+                </div>
+              )}
+              <div style={{ fontSize: 10, color: COL.faint, marginTop: 4 }}>文件→文字萃取 · 圖片→AI 視覺判讀 · 音訊/影片→佐證材料記錄</div>
             </Field>
             <Field label="情境變數（選填，可注入假設，逗號分隔）">
               <input value={form.variables} onChange={e => setForm({ ...form, variables: e.target.value })}
@@ -270,6 +342,8 @@ function ReportView({ detail, CARD }) {
   const seed = result.seed || {};
   const agents = result.agents || [];
   const rounds = result.rounds || [];
+  const fc = report.indexForecast;
+  const attachments = (detail.config && detail.config.attachments) || [];
 
   return (
     <>
@@ -286,7 +360,52 @@ function ReportView({ detail, CARD }) {
             <div style={{ fontSize: 11, color: COL.faint }}>信心度</div>
           </div>
         </div>
+        {attachments.length > 0 && (
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 12, paddingTop: 12, borderTop: `1px solid ${COL.border}` }}>
+            <span style={{ fontSize: 11, color: COL.faint }}>依據材料：</span>
+            {attachments.map((a, i) => (
+              <span key={i} style={{ fontSize: 11, color: COL.sub, background: COL.inner, border: `1px solid ${COL.border}`, borderRadius: 999, padding: '2px 8px' }}>
+                {FILE_ICON[a.kind] || '📎'} {a.name}
+              </span>
+            ))}
+          </div>
+        )}
       </div>
+
+      {/* 指數預估走勢（高點 + 轉折點）*/}
+      {fc && Array.isArray(fc.series) && fc.series.length > 0 && (
+        <div style={CARD}>
+          <h3 style={cardTitle}>📈 指數預估走勢 · 高點與轉折點（{fc.unit || '點'}）</h3>
+          <ResponsiveContainer width="100%" height={250}>
+            <LineChart data={fc.series} margin={{ top: 16, right: 24, left: 0, bottom: 0 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke={COL.border} />
+              <XAxis dataKey="date" tick={{ fontSize: 10, fill: COL.faint }} tickFormatter={d => String(d).slice(5)} axisLine={false} tickLine={false} />
+              <YAxis domain={['dataMin - 600', 'dataMax + 600']} tick={{ fontSize: 10, fill: COL.faint }} width={50} axisLine={false} tickLine={false} />
+              <RTooltip contentStyle={{ background: COL.inner, border: `1px solid ${COL.border}`, borderRadius: 8, color: COL.text, fontSize: 12 }}
+                formatter={v => [`${v} ${fc.unit || '點'}`, '預估']} />
+              <Line type="monotone" dataKey="level" stroke="#3b82f6" strokeWidth={2} dot={{ r: 2, fill: '#3b82f6' }} />
+              {fc.high && <ReferenceDot x={fc.high.date} y={fc.high.level} r={6} fill="#10b981" stroke="#fff"
+                label={{ value: `高點 ${fc.high.level}`, fontSize: 10, fill: '#10b981', position: 'top' }} />}
+              {(fc.turningPoints || []).filter(t => !fc.high || t.date !== fc.high.date).map((t, i) => (
+                <ReferenceDot key={i} x={t.date} y={t.level} r={5} fill="#ef4444" stroke="#fff"
+                  label={{ value: t.type || '轉折', fontSize: 9, fill: '#ef4444', position: 'bottom' }} />
+              ))}
+            </LineChart>
+          </ResponsiveContainer>
+          <div style={{ marginTop: 10 }}>
+            {(fc.turningPoints || []).map((t, i) => {
+              const isHigh = (t.type || '').includes('高');
+              return (
+                <div key={i} style={{ display: 'flex', gap: 8, marginBottom: 6, fontSize: 12.5 }}>
+                  <span style={{ fontWeight: 700, color: isHigh ? '#10b981' : '#ef4444', minWidth: 110, whiteSpace: 'nowrap' }}>{t.date} · {t.type}</span>
+                  <span style={{ color: COL.sub, lineHeight: 1.5 }}>{t.level}{fc.unit || '點'}　{t.note}</span>
+                </div>
+              );
+            })}
+          </div>
+          <div style={{ fontSize: 10, color: COL.faint, marginTop: 6 }}>※ 多代理情境推演，非投資建議</div>
+        </div>
+      )}
 
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
         {/* 情境分佈 */}
