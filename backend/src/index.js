@@ -18,6 +18,9 @@ const { initDb } = require('./db');
 const app = express();
 const PORT = process.env.PORT || 4000;
 
+// Railway/Cloudflare 反向代理 → 取得正確客戶端 IP（用於登入稽核）
+app.set('trust proxy', true);
+
 // Middleware
 const allowedOrigins = [
   'http://localhost:3000',
@@ -60,11 +63,20 @@ const toolsRouter = require('./routes/tools');
 const voiceRouter = require('./routes/voice');
 const hubSettingsRouter = require('./routes/hub-settings');
 const globalKbRouter = require('./routes/global-kb');
+const knowledgeRouter = require('./routes/knowledge');
+knowledgeRouter.seedPublicKBs?.(); // 啟動時預先播種公開知識庫（Firestore；fire-and-forget）
+const usersRouter = require('./routes/users');
 const productListingsRouter = require('./routes/product-listings');
+const trendsRouter = require('./routes/trends');
+const predictionsRouter = require('./routes/predictions');
 
 // Dashboard and analytics are read-only stats — optionalAuth so the sidebar can poll without a token
 app.use('/api/dashboard', optionalAuth, dashboardRouter);
 app.use('/api/analytics', optionalAuth, analyticsRouter);
+// Trends radar is read-only intel — optionalAuth so the Analytics page can fetch without a token
+app.use('/api/trends', optionalAuth, trendsRouter);
+// AI 預測（多代理模擬）— 與 analytics/trends 一致，optionalAuth 讓 Analytics 頁面可無 token 抓取
+app.use('/api/predictions', optionalAuth, predictionsRouter);
 // All mutation routes require a valid Firebase token
 app.use('/api/agents', requireAuth, agentsRouter);
 app.use('/api/content', requireAuth, contentRouter);
@@ -79,6 +91,8 @@ app.use('/api/tools', requireAuth, toolsRouter);
 app.use('/api/voice', optionalAuth, voiceRouter);
 app.use('/api/hub-settings', requireAuth, hubSettingsRouter);
 app.use('/api/global-kb', requireAuth, globalKbRouter);
+app.use('/api/knowledge', requireAuth, knowledgeRouter);
+app.use('/api/users', requireAuth, usersRouter);
 app.use('/api/product-listings', requireAuth, productListingsRouter);
 
 // 生成的媒體檔（圖片/影片/音樂）— 由 routes/content.js 寫入 backend/data/media

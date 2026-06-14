@@ -87,6 +87,24 @@ function initTables() {
       updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
     );
 
+    -- AI 預測（多代理模擬，MiroFish 核心原生重寫）。持久日誌表：絕不可加入 seedDemoData 清空清單
+    CREATE TABLE IF NOT EXISTS predictions (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      topic TEXT NOT NULL,
+      materials TEXT DEFAULT '',
+      config_json TEXT DEFAULT '{}',
+      status TEXT DEFAULT 'pending',
+      stage TEXT DEFAULT 'queued',
+      result_json TEXT,
+      headline TEXT,
+      confidence INTEGER DEFAULT 0,
+      model_used TEXT DEFAULT 'mock',
+      tokens_used INTEGER DEFAULT 0,
+      error TEXT,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+
     CREATE TABLE IF NOT EXISTS agent_tasks (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       agent_name TEXT NOT NULL,
@@ -360,6 +378,35 @@ function initTables() {
       char_count INTEGER DEFAULT 0,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP
     );
+
+    -- 學習知識庫（可分類、可選用、區分私有/公開；爬蟲蒸餾結果累積於此）
+    -- 持久表：絕不可加入 seedDemoData 的清空清單
+    CREATE TABLE IF NOT EXISTS knowledge_bases (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      name TEXT NOT NULL,
+      description TEXT DEFAULT '',
+      category TEXT DEFAULT 'general',   -- product_style|image_prompt|video_prompt|music_prompt|general
+      scope TEXT DEFAULT 'user',         -- 'user' | 'public'
+      entry_count INTEGER DEFAULT 0,
+      char_count INTEGER DEFAULT 0,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+
+    -- 知識庫條目（每筆 = 一次爬蟲蒸餾 / 手動新增的學習內容）；持久表，不可被 seed 清空
+    CREATE TABLE IF NOT EXISTS kb_entries (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      kb_id INTEGER NOT NULL,
+      title TEXT DEFAULT '',
+      content TEXT NOT NULL,
+      source_url TEXT DEFAULT '',
+      source_type TEXT DEFAULT 'manual', -- scrape|manual|tool
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+
+    -- 防止重複播種同名公開庫（INSERT OR IGNORE 用）
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_kb_name_scope ON knowledge_bases(name, scope);
+    CREATE INDEX IF NOT EXISTS idx_kb_entries_kb ON kb_entries(kb_id, created_at);
   `);
   // Migrations for existing DBs that predate these columns
   try { exec(`ALTER TABLE workflows ADD COLUMN category TEXT DEFAULT 'general'`); } catch (_) {}
@@ -742,6 +789,173 @@ function seedDemoData() {
   ].forEach(([key, val]) => {
     run(`INSERT INTO metrics_snapshots (metric_key, metric_value, snapshot_date) VALUES (?,?,?)`, [key, val, today]);
   });
+
+  seedPublicKnowledgeBases();
+}
+
+// 公開學習知識庫：平台提供給所有使用者的累積經驗範例。
+// 用 INSERT OR IGNORE（依 name+scope 唯一索引）只在首次播種，之後永不覆蓋——
+// 知識庫是持久累積資料，不可比照其他 demo 表清空重灌。
+function seedPublicKnowledgeBases() {
+  const publicKBs = [
+    {
+      name: '主流商品風格庫', category: 'product_style',
+      description: '從各大電商與社群歸納的熱門商品視覺與文案風格，供文案/選品參考。',
+      entries: [
+        { title: '極簡北歐風', content: '視覺：大量留白、低飽和莫蘭迪色、原木與棉麻材質。文案調性：簡短、強調生活感與質感，少用驚嘆號。適合：家居、餐廚、文具。' },
+        { title: '日系療癒風', content: '視覺：柔焦、暖色調、手寫字體、生活情境照。文案調性：溫柔、第一人稱、訴說日常小確幸。適合：保養、食品、寵物。' },
+        { title: '機能潮流風', content: '視覺：高對比、黑白灰加螢光點綴、產品特寫與數據標註。文案調性：強調規格、效能、限量稀缺。適合：3C、運動、戶外。' },
+      ],
+    },
+    {
+      name: 'AI 圖片 Prompt 庫', category: 'image_prompt',
+      description: '實測有效的 AI 生圖 prompt 模板與關鍵詞，供媒體生成參考優化。',
+      entries: [
+        { title: '商品情境圖', content: 'product photography of {product}, on a marble countertop, soft natural window light, shallow depth of field, minimal props, 50mm lens, high detail, commercial quality --ar 1:1' },
+        { title: '社群貼文主視覺', content: 'flat lay of {theme}, pastel color palette, top-down view, organized composition, soft shadows, lifestyle aesthetic, instagram-ready --ar 4:5' },
+      ],
+    },
+    {
+      name: 'AI 影片 / 音樂 Prompt 庫', category: 'video_prompt',
+      description: '短影音分鏡與配樂風格 prompt 範例。',
+      entries: [
+        { title: '產品開箱短片', content: '6s cinematic product reveal of {product}, slow dolly-in, hands unboxing, warm studio lighting, shallow focus, smooth camera motion' },
+        { title: '輕快背景音樂', content: 'upbeat acoustic pop, ukulele and claps, 120 bpm, cheerful and clean, suitable for lifestyle brand reels, no vocals' },
+      ],
+    },
+  ];
+
+  for (const kb of publicKBs) {
+    const charCount = kb.entries.reduce((s, e) => s + e.content.length, 0);
+    const info = run(
+      `INSERT OR IGNORE INTO knowledge_bases (name, description, category, scope, entry_count, char_count) VALUES (?,?,?,?,?,?)`,
+      [kb.name, kb.description, kb.category, 'public', kb.entries.length, charCount]
+    );
+    // 只有真的新插入（首次播種）時才寫入 entries，避免重複堆疊
+    if (info.changes > 0) {
+      const kbId = info.lastInsertRowid;
+      for (const e of kb.entries) {
+        run(`INSERT INTO kb_entries (kb_id, title, content, source_url, source_type) VALUES (?,?,?,?,?)`,
+          [kbId, e.title, e.content, '', 'manual']);
+      }
+    }
+  }
+}
+
+// AI 預測示範資料：逐主題冪等插入（該 topic 不存在才插），predictions 為持久表不清空。
+function seedDemoPredictions() {
+  const evResult = {
+    seed: {
+      summary: '台灣電動車市場進入補助延長與電池成本下降的雙利多週期，滲透率加速但充電基建與舊勢力反撲為變數。',
+      entities: ['政府交通部', '本土車廠', '國際品牌(Tesla/BYD)', '充電營運商', '一般消費者'],
+      signals: ['購車補助延長至 2027', '電池芯成本年降 12%', '都會充電樁佈點加密', '油價走高'],
+      drivers: ['政策補助', '電池成本曲線', '充電便利性', '二手殘值疑慮'],
+    },
+    agents: [
+      { id: 'a1', name: '林政翰', role: '都會通勤族', stance: '觀望偏正向', traits: '重 CP 值、在意充電便利' },
+      { id: 'a2', name: '陳怡君', role: '本土車廠產品經理', stance: '積極', traits: '看好補助拉動接單' },
+      { id: 'a3', name: '王克強', role: '傳統油車車主', stance: '保守', traits: '擔心殘值與里程焦慮' },
+      { id: 'a4', name: 'David Lin', role: '充電營運商', stance: '擴張', traits: '加速佈樁、綁定車廠' },
+    ],
+    rounds: [
+      { round: 1, roundSummary: '補助消息釋出後，通勤族詢問度上升，車廠加開預售；油車車主仍以殘值為由觀望。', aggregateSentiment: 0.42 },
+      { round: 2, roundSummary: '充電樁加密降低里程焦慮，觀望族部分轉為下訂；二手商開始給出較穩定殘值，保守派鬆動。', aggregateSentiment: 0.61 },
+    ],
+    report: {
+      headline: '2026 台灣電動車滲透率可望突破 15%，補助與充電基建為關鍵推手',
+      outlook: '未來 12 個月偏多。補助延長與電池降本形成正向循環，滲透率自個位數加速攀升；最大下行風險為充電基建落後熱區需求與舊勢力價格戰。',
+      confidence: 72,
+      distribution: { base: 60, bull: 25, bear: 15 },
+      keyDrivers: ['購車補助延長至 2027', '電池芯成本年降約 12%', '都會充電樁密度提升', '油價維持高檔'],
+      timeline: [
+        { when: 'Q1', event: '補助細則上路，預售爆量' },
+        { when: 'Q2-Q3', event: '充電樁加密，里程焦慮下降' },
+        { when: 'Q4', event: '滲透率突破 15%，二手殘值回穩' },
+      ],
+      risks: ['充電基建佈點落後熱區需求', '國際品牌價格戰壓縮本土車廠利潤', '補助退場後的需求斷崖'],
+      recommendation: '車廠應綁定充電營運商提供「購車+充電」套餐，並提前布局二手殘值保證以化解保守族疑慮。',
+    },
+  };
+
+  // ── 範例 2：台灣加權指數 2026 高點與轉折點預估（含 indexForecast 走勢圖）──
+  const twIndexResult = {
+    seed: {
+      summary: '2026 台股由 AI 伺服器與半導體拉貨主導，資金行情延續但高基期與美國大選、Fed 政策為波動來源；上半年強、年中見高、下半年震盪。',
+      entities: ['台積電與半導體權值', 'AI 伺服器供應鏈', '外資', '散戶', 'Fed/美國政策', '出口景氣'],
+      signals: ['AI 伺服器訂單能見度高', '外資回補科技權值', 'Fed 降息預期升溫', '新台幣偏強', '出口連續成長'],
+      drivers: ['AI 資本支出循環', '美國利率路徑', '外資資金流向', '地緣政治與大選不確定性', '電子業庫存週期'],
+    },
+    agents: [
+      { id: 'a1', name: '外資操盤手', role: '外資法人', stance: '偏多但靈活', traits: '看 AI 趨勢、隨利率調節' },
+      { id: 'a2', name: '本土投信', role: '投信法人', stance: '作帳偏多', traits: '季底拉抬權值' },
+      { id: 'a3', name: '散戶阿明', role: '一般散戶', stance: '追高殺低', traits: '情緒驅動、易追漲' },
+      { id: 'a4', name: '避險基金', role: '對沖基金', stance: '中性偏空', traits: '高點布局空單避險' },
+      { id: 'a5', name: '產業分析師', role: '賣方研究', stance: '結構偏多', traits: '重基本面與獲利上修' },
+    ],
+    rounds: [
+      { round: 1, roundSummary: '上半年 AI 拉貨旺、外資回補權值，指數逐月走高，散戶追價、投信作帳，動能強勁。', aggregateSentiment: 0.55 },
+      { round: 2, roundSummary: '年中見高後，高基期與大選不確定性引發獲利了結，避險部位增加，指數轉為高檔震盪、季線多次拉鋸。', aggregateSentiment: 0.18 },
+    ],
+    report: {
+      headline: '台股 2026 預估高點約 26,200 點落在 7 月，4 月與 9 月為兩大轉折',
+      outlook: '全年區間偏多後震盪。上半年由 AI 伺服器與半導體拉貨推升，年中（約 7 月）見年度高點；下半年受高基期、美國大選與 Fed 政策牽動轉入高檔震盪，9 月為主要回檔轉折。趨勢未轉空，但追高風險升高。',
+      confidence: 64,
+      distribution: { base: 58, bull: 24, bear: 18 },
+      keyDrivers: ['AI 伺服器資本支出循環', 'Fed 降息節奏', '外資資金流向', '電子業庫存回補', '地緣與大選不確定性'],
+      timeline: [
+        { when: '2026 Q1', event: 'AI 拉貨旺季 + 外資回補，指數逐月走高' },
+        { when: '2026 Q2', event: '4 月漲多獲利了結出現第一次回檔轉折' },
+        { when: '2026 Q3', event: '7 月見年度高點約 26,200，隨後高檔震盪' },
+        { when: '2026 Q4', event: '9 月回檔轉折後低檔回穩，年底收在 25,000 附近' },
+      ],
+      risks: ['AI 資本支出不如預期、拉貨動能放緩', 'Fed 升息或降息延後衝擊評價', '美國大選與兩岸地緣風險', '高基期下獲利了結賣壓'],
+      recommendation: '上半年順勢偏多並逢回布局 AI 與半導體權值；接近 7 月高點區（25,800–26,500）分批減碼、提高現金，9 月轉折後再評估回補。本預估為情境推演非投資建議。',
+      indexForecast: {
+        unit: '點',
+        series: [
+          { date: '2026-01', level: 23200 }, { date: '2026-02', level: 23800 }, { date: '2026-03', level: 24600 },
+          { date: '2026-04', level: 25200 }, { date: '2026-05', level: 24300 }, { date: '2026-06', level: 25100 },
+          { date: '2026-07', level: 26200 }, { date: '2026-08', level: 25400 }, { date: '2026-09', level: 24200 },
+          { date: '2026-10', level: 24800 }, { date: '2026-11', level: 25600 }, { date: '2026-12', level: 25000 },
+        ],
+        high: { date: '2026-07', level: 26200, note: 'AI 伺服器出貨高峰 + 降息預期，年度高點' },
+        turningPoints: [
+          { date: '2026-04', level: 25200, type: '轉折(回檔)', note: '第一季漲多，旺季獲利了結' },
+          { date: '2026-07', level: 26200, type: '高點', note: '基本面與資金面共振的年度高點' },
+          { date: '2026-09', level: 24200, type: '轉折(回檔)', note: '高基期 + 美國大選不確定性，季線回測' },
+        ],
+      },
+    },
+  };
+
+  const demos = [
+    {
+      topic: '2026 台灣電動車市場滲透率',
+      materials: '政府購車補助延長至 2027、電池芯成本年降約 12%、都會充電樁加密佈點、國際油價維持高檔。',
+      config: { agentCount: 4, rounds: 2, variables: ['油價維持高檔'], model: 'glm-5-turbo', language: 'zh-TW' },
+      result: evResult,
+    },
+    {
+      topic: '台灣加權指數 2026 高點與轉折點預估',
+      materials: 'AI 伺服器與半導體拉貨能見度高、外資回補科技權值、Fed 降息預期升溫、新台幣偏強、出口連續成長；高基期與美國大選為下半年變數。',
+      config: { agentCount: 5, rounds: 2, variables: ['Fed 如期降息', 'AI 拉貨延續'], model: 'glm-5-turbo', language: 'zh-TW' },
+      result: twIndexResult,
+    },
+  ];
+
+  for (const d of demos) {
+    const exists = get(`SELECT 1 FROM predictions WHERE topic = ? LIMIT 1`, [d.topic]);
+    if (exists) continue;
+    run(
+      `INSERT INTO predictions (topic, materials, config_json, status, stage, result_json, headline, confidence, model_used, tokens_used)
+       VALUES (?,?,?,?,?,?,?,?,?,?)`,
+      [
+        d.topic, d.materials, JSON.stringify(d.config),
+        'done', 'done', JSON.stringify(d.result),
+        d.result.report.headline, d.result.report.confidence, 'glm-5-turbo', 0,
+      ]
+    );
+  }
 }
 
 function initDb() {
@@ -750,6 +964,7 @@ function initDb() {
   db.pragma('foreign_keys = ON');
   initTables();
   seedDemoData();
+  seedDemoPredictions();
   console.log('[db] SQLite (better-sqlite3 WAL) initialized at', dbPath);
 }
 

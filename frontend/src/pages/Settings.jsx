@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useUISettings } from '../contexts/UISettingsContext.jsx';
 import PlatformIcon, { ICON_IDS } from '../components/PlatformIcon.jsx';
+import { apiFetch } from '../utils/apiClient.js';
 
 const STORAGE_KEY = 'growthos_integrations';
 
@@ -39,10 +40,23 @@ const SECTIONS = [
     fields: [],
   },
   {
+    id: 'knowledge', icon: '📚',
+    label: { en: 'Knowledge Bases', 'zh-TW': '知識庫', 'zh-CN': '知识库' },
+    fields: [],
+  },
+  {
     id: 'interface', icon: '🎨',
     label: { en: 'Interface', 'zh-TW': '介面設定', 'zh-CN': '界面设置' },
     fields: [],
   },
+];
+
+const KB_CATEGORIES = [
+  { value: 'general',      label: '通用' },
+  { value: 'product_style', label: '商品風格' },
+  { value: 'image_prompt', label: '圖片 Prompt' },
+  { value: 'video_prompt', label: '影片 Prompt' },
+  { value: 'music_prompt', label: '音樂 Prompt' },
 ];
 
 // ─── Messaging Platform Config ───────────────────────────────────────────────
@@ -1680,12 +1694,16 @@ export default function Settings() {
           <div style={{ fontSize: 12, color: colors.textDim, marginBottom: 28 }}>
             {activeSection === 'interface'
               ? (language === 'en' ? 'Appearance & language preferences' : language === 'zh-TW' ? '外觀與語言偏好設定' : '外观与语言偏好设置')
+              : activeSection === 'knowledge'
+              ? (language === 'en' ? 'Accumulated learning libraries that feed AI tools, content & media generation.' : language === 'zh-TW' ? '累積學習庫，供工具箱、內容工廠與媒體生成引用。爬蟲擷取的內容可累積於此。' : '累积学习库，供工具箱、内容工厂与媒体生成引用。爬虫抓取的内容可累积于此。')
               : (language === 'en' ? 'Credentials are stored locally in your browser.' : language === 'zh-TW' ? '帳號密碼僅儲存於本地瀏覽器，不會上傳至伺服器。' : '账号密码仅存储于本地浏览器，不会上传至服务器。')
             }
           </div>
 
           {activeSection === 'interface' ? (
             <InterfaceSection colors={colors} theme={theme} toggleTheme={toggleTheme} language={language} setLanguage={setLanguage} t={t} />
+          ) : activeSection === 'knowledge' ? (
+            <KnowledgeSection colors={colors} />
           ) : activeSection === 'messaging' ? (
             <MessagingSection colors={colors} />
           ) : activeSection === 'ecommerce' ? (
@@ -1846,3 +1864,191 @@ function InterfaceSection({ colors, theme, toggleTheme, language, setLanguage, t
     </div>
   );
 }
+
+// ─── KnowledgeSection ─────────────────────────────────────────────────────────
+
+function KnowledgeSection({ colors }) {
+  const [kbs, setKbs] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [creating, setCreating] = useState(false);
+  const [form, setForm] = useState({ name: '', description: '', category: 'general' });
+  const [err, setErr] = useState('');
+  const [detail, setDetail] = useState(null);       // 展開檢視的庫詳情
+  const [newEntry, setNewEntry] = useState({ title: '', content: '' });
+
+  async function load() {
+    setLoading(true);
+    try {
+      const r = await apiFetch('/api/knowledge');
+      setKbs(r.ok ? await r.json() : []);
+    } catch { setKbs([]); }
+    finally { setLoading(false); }
+  }
+  useEffect(() => { load(); }, []);
+
+  async function createKb() {
+    if (!form.name.trim()) { setErr('請輸入名稱'); return; }
+    setErr('');
+    try {
+      const r = await apiFetch('/api/knowledge', { method: 'POST', body: JSON.stringify(form) });
+      const d = await r.json();
+      if (!r.ok) { setErr(d.error || '建立失敗'); return; }
+      setForm({ name: '', description: '', category: 'general' });
+      setCreating(false);
+      load();
+    } catch { setErr('網路錯誤'); }
+  }
+
+  async function deleteKb(id) {
+    if (!window.confirm('確定刪除此知識庫及其所有條目？')) return;
+    try { await apiFetch(`/api/knowledge/${id}`, { method: 'DELETE' }); load(); if (detail?.id === id) setDetail(null); } catch {}
+  }
+
+  async function openDetail(id) {
+    try { const r = await apiFetch(`/api/knowledge/${id}`); if (r.ok) setDetail(await r.json()); } catch {}
+  }
+
+  async function addEntry() {
+    if (!detail || !newEntry.content.trim()) return;
+    try {
+      const r = await apiFetch(`/api/knowledge/${detail.id}/entries`, { method: 'POST', body: JSON.stringify({ ...newEntry, source_type: 'manual' }) });
+      if (r.ok) { setNewEntry({ title: '', content: '' }); openDetail(detail.id); load(); }
+    } catch {}
+  }
+
+  async function deleteEntry(eid) {
+    if (!detail) return;
+    try { await apiFetch(`/api/knowledge/${detail.id}/entries/${eid}`, { method: 'DELETE' }); openDetail(detail.id); load(); } catch {}
+  }
+
+  const catLabel = (c) => KB_CATEGORIES.find(x => x.value === c)?.label || c;
+  const userKbs = kbs.filter(k => k.scope === 'user');
+  const publicKbs = kbs.filter(k => k.scope === 'public');
+
+  const cardStyle = {
+    background: colors.card, border: `1px solid ${colors.border}`,
+    borderRadius: 10, padding: '12px 16px', marginBottom: 10,
+  };
+
+  function KbCard({ kb }) {
+    const isPublic = kb.scope === 'public';
+    return (
+      <div style={cardStyle}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+          <div style={{ minWidth: 0 }}>
+            <div style={{ fontSize: 14, fontWeight: 600, color: colors.text, display: 'flex', alignItems: 'center', gap: 6 }}>
+              {isPublic ? '🌐' : '🔒'} {kb.name}
+            </div>
+            <div style={{ fontSize: 11, color: colors.textDim, marginTop: 3 }}>
+              {catLabel(kb.category)} · {kb.entry_count} 筆 · {(kb.char_count || 0).toLocaleString()} 字
+              {kb.description ? ` · ${kb.description}` : ''}
+            </div>
+          </div>
+          <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
+            <button onClick={() => openDetail(kb.id)} style={btnStyle(colors)}>檢視</button>
+            {!isPublic && <button onClick={() => deleteKb(kb.id)} style={{ ...btnStyle(colors), color: '#ef4444', borderColor: '#ef444455' }}>刪除</button>}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div>
+      {loading && <div style={{ color: colors.textDim, fontSize: 13, padding: 20 }}>載入中…</div>}
+
+      {!loading && (
+        <>
+          {/* 我的知識庫 */}
+          <div style={{ fontSize: 11, fontWeight: 600, color: colors.textDim, margin: '4px 0 10px', letterSpacing: '0.08em', textTransform: 'uppercase' }}>
+            🔒 我的知識庫（{userKbs.length}）
+          </div>
+          {userKbs.map(kb => <KbCard key={kb.id} kb={kb} />)}
+          {userKbs.length === 0 && (
+            <div style={{ textAlign: 'center', padding: '24px', color: colors.textDim, fontSize: 13, background: colors.card, border: `1px dashed ${colors.border}`, borderRadius: 10, marginBottom: 10 }}>
+              尚無私有知識庫。建立後，可在 AI 工具箱的爬蟲工具勾選「存入知識庫」累積學習內容。
+            </div>
+          )}
+
+          {/* 建立新庫 */}
+          {creating ? (
+            <div style={{ ...cardStyle, borderColor: '#3b82f6' }}>
+              <input value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
+                placeholder="知識庫名稱（例：我的競品文案庫）"
+                style={inputStyle(colors)} />
+              <input value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))}
+                placeholder="描述（選填）" style={{ ...inputStyle(colors), marginTop: 8 }} />
+              <select value={form.category} onChange={e => setForm(f => ({ ...f, category: e.target.value }))}
+                style={{ ...inputStyle(colors), marginTop: 8 }}>
+                {KB_CATEGORIES.map(c => <option key={c.value} value={c.value}>{c.label}</option>)}
+              </select>
+              {err && <div style={{ color: '#ef4444', fontSize: 12, marginTop: 8 }}>{err}</div>}
+              <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
+                <button onClick={createKb} style={{ ...btnPrimary, flex: 1 }}>建立</button>
+                <button onClick={() => { setCreating(false); setErr(''); }} style={{ ...btnStyle(colors), flex: 1 }}>取消</button>
+              </div>
+            </div>
+          ) : (
+            <button onClick={() => setCreating(true)} style={{
+              display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, width: '100%',
+              padding: '11px 16px', borderRadius: 10, border: `1.5px dashed ${colors.border}`,
+              background: 'transparent', cursor: 'pointer', color: colors.textMuted, fontSize: 14, fontWeight: 500, marginBottom: 20,
+            }}>
+              <span style={{ fontSize: 18, lineHeight: 1 }}>＋</span><span>建立知識庫</span>
+            </button>
+          )}
+
+          {/* 公開庫 */}
+          <div style={{ fontSize: 11, fontWeight: 600, color: colors.textDim, margin: '8px 0 10px', letterSpacing: '0.08em', textTransform: 'uppercase' }}>
+            🌐 公開共享庫（{publicKbs.length}）
+          </div>
+          {publicKbs.map(kb => <KbCard key={kb.id} kb={kb} />)}
+          {publicKbs.length === 0 && <div style={{ color: colors.textDim, fontSize: 12 }}>暫無公開庫</div>}
+        </>
+      )}
+
+      {/* 詳情彈窗 */}
+      {detail && (
+        <div onClick={() => setDetail(null)} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 50, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
+          <div onClick={e => e.stopPropagation()} style={{ background: colors.card, border: `1px solid ${colors.border}`, borderRadius: 14, width: '100%', maxWidth: 640, maxHeight: '85vh', display: 'flex', flexDirection: 'column' }}>
+            <div style={{ padding: '16px 20px', borderBottom: `1px solid ${colors.border}`, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div style={{ fontSize: 15, fontWeight: 700, color: colors.text }}>
+                {detail.scope === 'public' ? '🌐' : '🔒'} {detail.name}
+                <span style={{ fontSize: 11, fontWeight: 400, color: colors.textDim, marginLeft: 8 }}>{catLabel(detail.category)} · {detail.entries?.length || 0} 筆</span>
+              </div>
+              <button onClick={() => setDetail(null)} style={{ background: 'none', border: 'none', color: colors.textDim, fontSize: 20, cursor: 'pointer' }}>×</button>
+            </div>
+            <div style={{ flex: 1, overflowY: 'auto', padding: '16px 20px' }}>
+              {detail.scope !== 'public' && (
+                <div style={{ marginBottom: 16, paddingBottom: 16, borderBottom: `1px solid ${colors.border}` }}>
+                  <input value={newEntry.title} onChange={e => setNewEntry(s => ({ ...s, title: e.target.value }))} placeholder="條目標題（選填）" style={inputStyle(colors)} />
+                  <textarea value={newEntry.content} onChange={e => setNewEntry(s => ({ ...s, content: e.target.value }))} placeholder="條目內容（手動新增一筆學習內容）" rows={3} style={{ ...inputStyle(colors), marginTop: 8, resize: 'vertical' }} />
+                  <button onClick={addEntry} style={{ ...btnPrimary, marginTop: 8 }}>＋ 新增條目</button>
+                </div>
+              )}
+              {(detail.entries || []).map(e => (
+                <div key={e.id} style={{ ...cardStyle, marginBottom: 8 }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8 }}>
+                    <div style={{ fontSize: 13, fontWeight: 600, color: colors.text }}>{e.title || '（無標題）'}</div>
+                    {detail.scope !== 'public' && <button onClick={() => deleteEntry(e.id)} style={{ background: 'none', border: 'none', color: colors.textDim, fontSize: 14, cursor: 'pointer' }}>✕</button>}
+                  </div>
+                  <div style={{ fontSize: 12, color: colors.textMuted, marginTop: 4, whiteSpace: 'pre-wrap' }}>{e.content}</div>
+                  {e.source_url && <div style={{ fontSize: 10, color: colors.textDim, marginTop: 4 }}>🔗 {e.source_url} · {e.source_type}</div>}
+                </div>
+              ))}
+              {(detail.entries || []).length === 0 && <div style={{ color: colors.textDim, fontSize: 12, textAlign: 'center', padding: 20 }}>此庫尚無條目</div>}
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function btnStyle(colors) {
+  return { padding: '5px 12px', borderRadius: 7, border: `1px solid ${colors.border}`, background: 'transparent', color: colors.textMuted, fontSize: 12, cursor: 'pointer' };
+}
+function inputStyle(colors) {
+  return { width: '100%', padding: '9px 12px', borderRadius: 8, background: colors.inputBg, border: `1px solid ${colors.inputBorder}`, color: colors.text, fontSize: 13, outline: 'none', boxSizing: 'border-box' };
+}
+const btnPrimary = { padding: '8px 16px', borderRadius: 8, border: 'none', background: 'linear-gradient(90deg,#3b82f6,#8b5cf6)', color: '#fff', fontSize: 13, fontWeight: 600, cursor: 'pointer' };

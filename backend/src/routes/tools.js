@@ -2,10 +2,68 @@ const express = require('express');
 const router = express.Router();
 const { run, all } = require('../db');
 const { callAI } = require('../aiRouter');
+const { scrapeUrl, searchWeb } = require('../services/scrapeRouter');
+const { getKBText, addEntry } = require('./knowledge');
+const fsdb = require('../services/firestore');
+
+// AI 經驗紀錄（fire-and-forget，寫 Firestore ai_runs；無憑證時 no-op）
+function logAiRun(req, { kind, refId, prompt, output, model }) {
+  if (!fsdb.isEnabled()) return;
+  try {
+    fsdb.getDb().collection('ai_runs').add({
+      uid: req.user?.uid || null, kind, refId: refId || '',
+      prompt: String(prompt || '').slice(0, 4000), output: String(output || '').slice(0, 8000),
+      model: model || '', created_at: fsdb.serverTimestamp(),
+    }).catch(() => {});
+  } catch (_) {}
+}
+
+// 爬蟲資料持久化（fire-and-forget，寫 Firestore scrape_records）
+function logScrape(req, scraped, distilled) {
+  if (!fsdb.isEnabled()) return;
+  try {
+    fsdb.getDb().collection('scrape_records').add({
+      uid: req.user?.uid || null, url: scraped.url || '', title: scraped.title || '',
+      content: String(scraped.content || '').slice(0, 20000), distilled: String(distilled || '').slice(0, 8000),
+      provider: scraped.provider || '', source: scraped.source || '', created_at: fsdb.serverTimestamp(),
+    }).catch(() => {});
+  } catch (_) {}
+}
 
 // AI 工具目錄（PRD 4.26 Tool Marketplace；技能取材自運營技能地圖）
 // 每個工具 = 輸入欄位 + Prompt 模板，執行時經 AI Router 產出結果
 const TOOLS = [
+  // ── 爬蟲擷取（type:'scrape'，不走 AI prompt，改走 scrapeRouter；analyze 為選填 AI 蒸餾） ──
+  {
+    id: 'web-scrape', category: 'scrape', icon: '🌐', name: '萬能網頁擷取',
+    type: 'scrape', scrape: { mode: 'url' },
+    description: '貼上任意網址（新聞、部落格、電商、官網等前 100 名網站），取回乾淨內文。可選 AI 蒸餾重點並存入知識庫。',
+    inputs: [
+      { key: 'url', label: '網址', placeholder: '例：https://www.example.com/article', required: true },
+      { key: 'analyze', label: 'AI 分析指令（選填）', placeholder: '例：摘要重點 / 抽取所有價格 / 翻成英文 / 歸納文案風格' },
+    ],
+  },
+  {
+    id: 'search-scrape', category: 'scrape', icon: '🔍', name: '搜尋引擎擷取',
+    type: 'scrape', scrape: { mode: 'search' },
+    description: '輸入關鍵字，從 Google / Yahoo / Bing 取回前幾筆搜尋結果摘要。可選 AI 蒸餾並存入知識庫。',
+    inputs: [
+      { key: 'keyword', label: '搜尋關鍵字', placeholder: '例：2026 AI 行銷趨勢', required: true },
+      { key: 'engine', label: '搜尋引擎', type: 'select', options: [
+        { value: 'google', label: 'Google' }, { value: 'yahoo', label: 'Yahoo' }, { value: 'bing', label: 'Bing' },
+      ] },
+      { key: 'analyze', label: 'AI 分析指令（選填）', placeholder: '例：整理出 5 個共同重點 / 歸納主流觀點' },
+    ],
+  },
+  {
+    id: 'social-scrape', category: 'scrape', icon: '💬', name: '社群貼文擷取',
+    type: 'scrape', scrape: { mode: 'url' },
+    description: '貼上 Threads / Facebook / Instagram 的「公開」貼文網址，擷取貼文文字。登入牆/私人內容無法取得（平台限制）。',
+    inputs: [
+      { key: 'url', label: '公開貼文網址', placeholder: '例：https://www.threads.net/@user/post/...', required: true },
+      { key: 'analyze', label: 'AI 分析指令（選填）', placeholder: '例：歸納貼文風格與鉤子 / 抽取 hashtag' },
+    ],
+  },
   // ── 內容創作 ──
   {
     id: 'product-copy', category: 'content', icon: '🛍️', name: '商品賣點文案',
@@ -249,6 +307,7 @@ const TOOLS = [
 ];
 
 const CATEGORIES = [
+  { key: 'scrape',    name: '爬蟲擷取', icon: '🕷️' },
   { key: 'marketing', name: '行銷增長', icon: '📈' },
   { key: 'content',   name: '內容創作', icon: '✍️' },
   { key: 'seo',       name: 'SEO',     icon: '🔍' },
@@ -262,7 +321,8 @@ const CATEGORIES = [
 // GET /api/tools — 工具目錄
 router.get('/', (req, res) => {
   const { category } = req.query;
-  let tools = TOOLS.map(({ system, prompt, ...meta }) => meta);
+  // 剝除內部欄位（system/prompt/scrape）；保留 type 讓前端辨識爬蟲工具
+  let tools = TOOLS.map(({ system, prompt, scrape, ...meta }) => meta);
   if (category && category !== 'all') tools = tools.filter(t => t.category === category);
   res.json({ tools, categories: CATEGORIES });
 });
@@ -281,7 +341,7 @@ router.get('/history', (req, res) => {
   }
 });
 
-// POST /api/tools/:id/run — 執行工具（經 AI Router，結果存入 content_history）
+// POST /api/tools/:id/run — 執行工具（爬蟲走 scrapeRouter，其餘走 AI Router；結果存入 content_history）
 router.post('/:id/run', async (req, res) => {
   try {
     const tool = TOOLS.find(t => t.id === req.params.id);
@@ -293,18 +353,26 @@ router.post('/:id/run', async (req, res) => {
       return res.status(400).json({ error: `請填寫：${missing.map(f => f.label).join('、')}` });
     }
 
+    if (tool.type === 'scrape') return runScrapeTool(tool, inputs, req, res);
+
+    // 引用知識庫（選定庫內容前置注入 system）
+    let system = tool.system;
+    const kbText = await getKBText(req.body.kb_ids);
+    if (kbText) system += `\n\n${kbText}`;
+
     let prompt = tool.prompt;
     for (const field of tool.inputs) {
       prompt = prompt.replaceAll(`{${field.key}}`, String(inputs[field.key] || '未指定').trim());
     }
 
-    const result = await callAI(prompt, tool.system, {
+    const result = await callAI(prompt, system, {
       model: req.body.model || 'glm-5-turbo',
       maxTokens: 2000,
     });
 
     run(`INSERT INTO content_history (type, prompt, output, model_used, tokens_used) VALUES (?,?,?,?,?)`,
       [`tool:${tool.id}`, prompt, result.content, result.model, result.tokensUsed]);
+    logAiRun(req, { kind: 'tool', refId: tool.id, prompt, output: result.content, model: result.model });
 
     res.json({
       tool_id: tool.id,
@@ -318,5 +386,68 @@ router.post('/:id/run', async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 });
+
+// 爬蟲工具執行：擷取 → 選填 AI 蒸餾 → 選填存入知識庫 → 寫 content_history
+async function runScrapeTool(tool, inputs, req, res) {
+  // 1) 擷取
+  let scraped;
+  if (tool.scrape.mode === 'search') {
+    scraped = await searchWeb(inputs.keyword, inputs.engine || 'google');
+  } else {
+    scraped = await scrapeUrl(inputs.url);
+  }
+
+  const header = `🔗 來源：${scraped.url}\n📄 標題：${scraped.title || '（無標題）'}\n🛠️ 擷取方式：${scraped.provider}${scraped.truncated ? '（內容已截斷）' : ''}`;
+  const rawBody = scraped.content || '（無內容）';
+
+  // 2) 選填 AI 蒸餾
+  const analyze = String(inputs.analyze || '').trim();
+  let distilled = '';
+  let model = scraped.provider;
+  let source = scraped.source;
+  if (analyze && scraped.source !== 'mock') {
+    const aiResult = await callAI(
+      `以下是從網頁擷取的內容，請依指令處理：\n\n【指令】${analyze}\n\n【網頁內容】\n${rawBody.slice(0, 6000)}`,
+      '你是資料分析與知識萃取專家，擅長從原始網頁內容歸納可複用的重點、風格與模式。使用繁體中文，輸出條理清晰。',
+      { model: req.body.model || 'glm-5-turbo', maxTokens: 1500 }
+    );
+    distilled = aiResult.content;
+    model = `${scraped.provider} + ${aiResult.model}`;
+    source = aiResult.source === 'mock' ? scraped.source : aiResult.source;
+  }
+
+  const output = distilled
+    ? `${header}\n\n━━━ AI 分析結果 ━━━\n${distilled}\n\n━━━ 原始內容 ━━━\n${rawBody}`
+    : `${header}\n\n${rawBody}`;
+
+  // 3) 選填存入知識庫（以蒸餾結果優先，否則原文）；id 為字串（Firestore）或數字（SQLite），不可 parseInt
+  let savedToKb = null;
+  const kbId = String(inputs.save_to_kb || '').trim();
+  if (kbId) {
+    const ok = await addEntry(kbId, {
+      title: scraped.title || scraped.url,
+      content: distilled || rawBody,
+      source_url: scraped.url,
+      source_type: 'scrape',
+    });
+    savedToKb = ok ? kbId : null;
+  }
+
+  // 持久化爬蟲資料 + AI 經驗（Firestore，fire-and-forget）
+  logScrape(req, scraped, distilled);
+  logAiRun(req, { kind: 'tool', refId: tool.id, prompt: scraped.url, output, model });
+
+  run(`INSERT INTO content_history (type, prompt, output, model_used, tokens_used) VALUES (?,?,?,?,?)`,
+    [`tool:${tool.id}`, scraped.url, output, model, 0]);
+
+  res.json({
+    tool_id: tool.id,
+    tool_name: tool.name,
+    output,
+    model,
+    source,
+    saved_to_kb: savedToKb,
+  });
+}
 
 module.exports = router;

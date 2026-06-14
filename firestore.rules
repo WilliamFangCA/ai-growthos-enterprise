@@ -1,0 +1,30 @@
+rules_version = '2';
+// AI GrowthOS Enterprise — Firestore 安全規則
+// 架構：所有讀寫都走後端 admin SDK（admin 繞過規則）。客戶端（含公開 web API key）
+// 預設一律拒絕，避免有人拿前端 config 直接讀寫資料庫。
+// 僅開放使用者讀自己的 users/{uid} 文件與其子集合（為未來 realtime 預留；目前前端不直連）。
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // 使用者個人檔 + 登入稽核：只有本人可讀，寫入一律走後端
+    match /users/{uid} {
+      allow read: if request.auth != null && request.auth.uid == uid;
+      allow write: if false;
+      match /{sub=**} {
+        allow read: if request.auth != null && request.auth.uid == uid;
+        allow write: if false;
+      }
+    }
+
+    // 知識庫 / 爬蟲紀錄 / AI 經驗：全部僅後端可存取，客戶端拒絕
+    match /knowledge_bases/{doc=**} { allow read, write: if false; }
+    match /scrape_records/{doc=**}  { allow read, write: if false; }
+    match /ai_runs/{doc=**}         { allow read, write: if false; }
+
+    // 其餘預設拒絕
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

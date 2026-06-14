@@ -23,6 +23,13 @@ export default function Toolbox() {
   const [error, setError] = useState('');
   const [copied, setCopied] = useState(false);
 
+  // 知識庫（引用 / 存入）
+  const [kbs, setKbs] = useState([]);
+  const [selectedKbIds, setSelectedKbIds] = useState([]);
+  const [saveToKb, setSaveToKb] = useState('');
+
+  const isScrape = activeTool?.type === 'scrape';
+
   async function loadTools() {
     setCatalogLoading(true);
     setLoadError(false);
@@ -42,16 +49,32 @@ export default function Toolbox() {
   async function loadHistory() {
     try { const r = await apiFetch('/api/tools/history'); if (r.ok) setHistory(await r.json()); } catch {}
   }
+  async function loadKbs() {
+    try { const r = await apiFetch('/api/knowledge'); if (r.ok) setKbs(await r.json()); } catch {}
+  }
 
   useEffect(() => { loadTools(); }, [category]);
-  useEffect(() => { loadHistory(); }, []);
+  useEffect(() => { loadHistory(); loadKbs(); }, []);
+
+  // 預設帶入工具的 select 欄位第一個選項
+  function defaultInputs(tool) {
+    const d = {};
+    (tool.inputs || []).forEach(f => { if (f.type === 'select' && f.options?.length) d[f.key] = f.options[0].value; });
+    return d;
+  }
 
   function openTool(tool) {
     setActiveTool(tool);
-    setInputs({});
+    setInputs(defaultInputs(tool));
+    setSelectedKbIds([]);
+    setSaveToKb('');
     setResult(null);
     setError('');
     setCopied(false);
+  }
+
+  function toggleKb(id) {
+    setSelectedKbIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
   }
 
   async function runTool() {
@@ -62,14 +85,17 @@ export default function Toolbox() {
     setError('');
     setResult(null);
     try {
+      const runInputs = { ...inputs };
+      if (isScrape && saveToKb) runInputs.save_to_kb = saveToKb;
       const r = await apiFetch(`/api/tools/${activeTool.id}/run`, {
         method: 'POST',
-        body: JSON.stringify({ inputs }),
+        body: JSON.stringify({ inputs: runInputs, kb_ids: selectedKbIds }),
       });
       const data = await r.json();
       if (!r.ok) { setError(data.error || '執行失敗，請稍後再試'); return; }
       setResult(data);
       loadHistory();
+      if (data.saved_to_kb) loadKbs();
     } catch {
       setError('網路錯誤，請稍後再試');
     } finally {
@@ -193,17 +219,60 @@ export default function Toolbox() {
                       <label className="text-xs text-gray-600 font-medium">
                         {f.label} {f.required && <span className="text-red-500">*</span>}
                       </label>
-                      <textarea value={inputs[f.key] || ''} autoFocus={i === 0} rows={2}
-                        onChange={e => setInputs(prev => ({ ...prev, [f.key]: e.target.value }))}
-                        placeholder={f.placeholder}
-                        className="mt-1 w-full px-3 py-2 rounded-lg border border-gray-200 text-sm resize-none" />
+                      {f.type === 'select' ? (
+                        <select value={inputs[f.key] || (f.options?.[0]?.value || '')}
+                          onChange={e => setInputs(prev => ({ ...prev, [f.key]: e.target.value }))}
+                          className="mt-1 w-full px-3 py-2 rounded-lg border border-gray-200 text-sm bg-white">
+                          {(f.options || []).map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+                        </select>
+                      ) : (
+                        <textarea value={inputs[f.key] || ''} autoFocus={i === 0} rows={2}
+                          onChange={e => setInputs(prev => ({ ...prev, [f.key]: e.target.value }))}
+                          placeholder={f.placeholder}
+                          className="mt-1 w-full px-3 py-2 rounded-lg border border-gray-200 text-sm resize-none" />
+                      )}
                     </div>
                   ))}
+
+                  {/* 爬蟲工具：存入知識庫 */}
+                  {isScrape && (
+                    <div>
+                      <label className="text-xs text-gray-600 font-medium">📥 擷取結果存入知識庫（選填）</label>
+                      <select value={saveToKb} onChange={e => setSaveToKb(e.target.value)}
+                        className="mt-1 w-full px-3 py-2 rounded-lg border border-gray-200 text-sm bg-white">
+                        <option value="">不儲存</option>
+                        {kbs.filter(k => k.scope === 'user').map(k => (
+                          <option key={k.id} value={k.id}>{k.name}（{k.entry_count} 筆）</option>
+                        ))}
+                      </select>
+                      {kbs.filter(k => k.scope === 'user').length === 0 && (
+                        <p className="mt-1 text-[11px] text-gray-400">尚無私有知識庫，可至「系統設定 → 知識庫」建立</p>
+                      )}
+                    </div>
+                  )}
+
+                  {/* 引用知識庫（注入 AI 作為資料來源） */}
+                  {kbs.length > 0 && (
+                    <div>
+                      <label className="text-xs text-gray-600 font-medium">📚 引用知識庫（選填，作為 AI 參考資料）</label>
+                      <div className="mt-1 flex flex-wrap gap-1.5">
+                        {kbs.map(k => (
+                          <button key={k.id} type="button" onClick={() => toggleKb(k.id)}
+                            className={`px-2.5 py-1 rounded-full text-xs border ${selectedKbIds.includes(k.id)
+                              ? 'bg-blue-600 text-white border-blue-600'
+                              : 'bg-white text-gray-600 border-gray-200 hover:border-blue-300'}`}>
+                            {k.scope === 'public' ? '🌐' : '🔒'} {k.name}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
                   {error && <div className="text-sm text-red-600 bg-red-50 rounded-lg px-3 py-2">⚠️ {error}</div>}
                   {running && (
                     <div className="flex items-center gap-3 text-sm text-blue-600 bg-blue-50 rounded-lg px-3 py-3">
                       <div className="w-4 h-4 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
-                      AI 正在生成中，約需 10–30 秒…
+                      {isScrape ? '正在擷取網頁內容，可能需要 10–40 秒…' : 'AI 正在生成中，約需 10–30 秒…'}
                     </div>
                   )}
                 </div>
@@ -214,7 +283,8 @@ export default function Toolbox() {
                 <div>
                   <div className="flex items-center justify-between mb-2">
                     <span className="text-xs text-gray-400">
-                      模型：{result.model}{result.source === 'mock' ? '（示範模式，請在系統設定填入 AI 金鑰）' : ''}
+                      {result.model && `模型：${result.model}`}{result.source === 'mock' ? '（示範模式，請在系統設定填入 AI 金鑰）' : ''}
+                      {result.saved_to_kb ? ' · ✅ 已存入知識庫' : ''}
                     </span>
                     <button onClick={copyResult}
                       className="px-2.5 py-1 rounded-lg text-xs bg-gray-100 text-gray-600 hover:bg-gray-200">

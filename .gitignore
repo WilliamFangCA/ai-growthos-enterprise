@@ -6,6 +6,10 @@ worker/dist/
 backend/data/*.db
 backend/data/*.db-shm
 backend/data/*.db-wal
+backend/data/media/
+backend/data/knowledge-base/
+backend/data/voices/
+backend/data/trends-snapshot.json
 backend/backend.log
 *.log
 .DS_Store

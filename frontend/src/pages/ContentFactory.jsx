@@ -93,6 +93,11 @@ export default function ContentFactory() {
   const pollRef = useRef(null);
   const tickRef = useRef(null);
 
+  // 引用知識庫
+  const [kbs, setKbs] = useState([]);
+  const [selectedKbIds, setSelectedKbIds] = useState([]);
+  const toggleKb = (id) => setSelectedKbIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
+
   const typeInfo = CONTENT_TYPES.find(ct => ct.id === selectedType);
   const isMedia = !!typeInfo?.media;
   const typeColor = typeInfo?.color || '#3b82f6';
@@ -125,6 +130,7 @@ export default function ContentFactory() {
 
   useEffect(() => {
     fetchHistory();
+    apiFetch('/api/knowledge').then(r => r.json()).then(d => setKbs(Array.isArray(d) ? d : [])).catch(() => {});
   }, [fetchHistory]);
 
   // 切換類型：媒體類型載入該類歷史，並清空上一個結果
@@ -171,7 +177,7 @@ export default function ContentFactory() {
       const res = await apiFetch('/api/content/media', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ kind: selectedType, prompt, options, language }),
+        body: JSON.stringify({ kind: selectedType, prompt, options, language, kb_ids: selectedKbIds }),
       });
       const data = await res.json();
       if (data.error) throw new Error(data.error);
@@ -196,7 +202,7 @@ export default function ContentFactory() {
     setOutput('');
 
     try {
-      const body = { type: selectedType, prompt, language };
+      const body = { type: selectedType, prompt, language, kb_ids: selectedKbIds };
       if (platform) body.platform = platform;
 
       const res = await apiFetch('/api/content/generate', {
@@ -330,6 +336,28 @@ export default function ContentFactory() {
                       <span>{preset.label[language] ?? preset.label['zh-TW'] ?? preset.label.en}</span>
                     </button>
                   ))}
+                </div>
+              </div>
+            )}
+
+            {/* 引用知識庫（注入 AI 作為風格/資料參考） */}
+            {kbs.length > 0 && (
+              <div style={{ marginBottom: 12 }}>
+                <div style={{ fontSize: 11, color: '#6b7280', marginBottom: 6 }}>📚 引用知識庫（選填）</div>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                  {kbs.map(k => {
+                    const on = selectedKbIds.includes(k.id);
+                    return (
+                      <button key={k.id} onClick={() => toggleKb(k.id)} style={{
+                        padding: '5px 11px', borderRadius: 20, fontSize: 12, cursor: 'pointer',
+                        background: on ? `${typeColor}25` : '#12151f',
+                        border: `1px solid ${on ? typeColor + '80' : '#2a2d3e'}`,
+                        color: on ? typeColor : '#9ca3af',
+                      }}>
+                        {k.scope === 'public' ? '🌐' : '🔒'} {k.name}
+                      </button>
+                    );
+                  })}
                 </div>
               </div>
             )}

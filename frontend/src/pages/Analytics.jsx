@@ -3,6 +3,8 @@ import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell,
   LineChart, Line, PieChart, Pie, Legend, CartesianGrid, LabelList,
 } from 'recharts';
+import TrendRadar from '../components/analytics/TrendRadar.jsx';
+import PredictionPanel from '../components/analytics/PredictionPanel.jsx';
 
 const PLATFORM_COLORS = {
   // E-commerce
@@ -74,7 +76,7 @@ const AARRR_STAGE_COLORS = {
 };
 
 export default function Analytics() {
-  const [tab, setTab] = useState('overview');
+  const [tab, setTab] = useState('trends');
   const [overview, setOverview] = useState(null);
   const [revenue, setRevenue] = useState(null);
   const [members, setMembers] = useState(null);
@@ -119,6 +121,8 @@ export default function Analytics() {
       {/* Tabs */}
       <div style={{ display: 'flex', gap: 0, background: '#1a1d2e', border: '1px solid #2a2d3e', borderRadius: 10, overflow: 'hidden', width: 'fit-content', marginBottom: 20 }}>
         {[
+          { key: 'trends',     label: '🌐 全球趨勢雷達' },
+          { key: 'predict',    label: '🔮 AI 預測'    },
           { key: 'overview',   label: 'AARRR 漏斗' },
           { key: 'revenue',    label: '營收分析'   },
           { key: 'members',    label: '會員分析'   },
@@ -136,6 +140,12 @@ export default function Analytics() {
           </button>
         ))}
       </div>
+
+      {/* === GLOBAL TREND RADAR TAB === */}
+      {tab === 'trends' && <TrendRadar />}
+
+      {/* === AI 預測 TAB === */}
+      {tab === 'predict' && <PredictionPanel />}
 
       {/* === AARRR TAB === */}
       {tab === 'overview' && aarrr && (

@@ -4,6 +4,7 @@ import { BrowserRouter } from 'react-router-dom';
 import App from './App.jsx';
 import './index.css';
 import { onAuthChange } from './firebase.js';
+import { apiFetch } from './utils/apiClient.js';
 import { ModelSettingsProvider } from './contexts/ModelSettings.jsx';
 import { UISettingsProvider } from './contexts/UISettingsContext.jsx';
 
@@ -17,7 +18,15 @@ function Root() {
   const [user, setUser] = useState(undefined); // undefined = loading
 
   useEffect(() => {
-    const unsubscribe = onAuthChange((u) => setUser(u));
+    let lastSyncedUid = null;
+    const unsubscribe = onAuthChange((u) => {
+      setUser(u);
+      // 登入後同步個人檔 + 記錄登入事件（IP/時間，後端寫 Firestore）；每個 uid 只同步一次，fire-and-forget
+      if (u && u.uid !== lastSyncedUid) {
+        lastSyncedUid = u.uid;
+        apiFetch('/api/users/sync', { method: 'POST' }).catch(() => {});
+      }
+    });
     return unsubscribe;
   }, []);
 

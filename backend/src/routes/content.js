@@ -4,7 +4,21 @@ const fs = require('fs');
 const router = express.Router();
 const { callAI } = require('../aiRouter');
 const { getGlobalKBText } = require('./global-kb');
+const { getKBText } = require('./knowledge');
+const fsdb = require('../services/firestore');
 const { generateImage, generateVideo, generateMusic } = require('../services/mediaRouter');
+
+// AI 經驗紀錄（fire-and-forget，寫 Firestore ai_runs；無憑證時 no-op）
+function logAiRun(req, { kind, refId, prompt, output, model }) {
+  if (!fsdb.isEnabled()) return;
+  try {
+    fsdb.getDb().collection('ai_runs').add({
+      uid: req.user?.uid || null, kind, refId: refId || '',
+      prompt: String(prompt || '').slice(0, 4000), output: String(output || '').slice(0, 8000),
+      model: model || '', created_at: fsdb.serverTimestamp(),
+    }).catch(() => {});
+  } catch (_) {}
+}
 const { run, get, all } = require('../db');
 
 const SYSTEM_PROMPTS = {
@@ -36,7 +50,7 @@ router.get('/history', (req, res) => {
 
 // POST /api/content/generate
 router.post('/generate', async (req, res) => {
-  const { type, prompt, platform, language } = req.body;
+  const { type, prompt, platform, language, kb_ids } = req.body;
 
   if (!type || !prompt) {
     return res.status(400).json({ error: 'type and prompt are required' });
@@ -52,6 +66,8 @@ router.post('/generate', async (req, res) => {
     systemPrompt += ` ${LANGUAGE_INSTRUCTIONS[language] || LANGUAGE_INSTRUCTIONS['zh-TW']}`;
     const globalKB = await getGlobalKBText();
     if (globalKB) systemPrompt += `\n\n${globalKB}`;
+    const kbText = await getKBText(kb_ids);
+    if (kbText) systemPrompt += `\n\n${kbText}`;
 
     const result = await callAI(prompt, systemPrompt, {
       model: 'glm-5-turbo',
@@ -63,6 +79,7 @@ router.post('/generate', async (req, res) => {
       `INSERT INTO content_history (type, prompt, output, model_used, tokens_used) VALUES (?,?,?,?,?)`,
       [type, prompt, result.content, result.model, result.tokensUsed]
     );
+    logAiRun(req, { kind: 'content', refId: type, prompt, output: result.content, model: result.model });
 
     res.json({
       type,
@@ -135,9 +152,9 @@ async function processMediaJob(id, kind, prompt, options) {
   }
 }
 
-// POST /api/content/media  { kind, prompt, options?, language? }
-router.post('/media', (req, res) => {
-  const { kind, prompt, options = {}, language } = req.body;
+// POST /api/content/media  { kind, prompt, options?, language?, kb_ids? }
+router.post('/media', async (req, res) => {
+  const { kind, prompt, options = {}, language, kb_ids } = req.body;
 
   if (!MEDIA_KINDS[kind]) {
     return res.status(400).json({ error: `Unknown kind: ${kind}. Valid: image, video, music` });
@@ -148,13 +165,18 @@ router.post('/media', (req, res) => {
 
   try {
     const opts = { ...options, language };
+    // 引用知識庫：將選定庫的風格/prompt 範例（精簡）併入媒體 prompt 作為風格參考
+    let finalPrompt = prompt;
+    const kbText = await getKBText(kb_ids, 800);
+    if (kbText) finalPrompt = `${prompt}\n\n[風格參考]\n${kbText}`;
     const info = run(
       `INSERT INTO media_jobs (kind, prompt, options_json, status) VALUES (?,?,?,?)`,
-      [kind, prompt, JSON.stringify(opts), 'pending']
+      [kind, finalPrompt, JSON.stringify(opts), 'pending']
     );
     const id = info.lastInsertRowid;
     // fire-and-forget：背景執行，前端輪詢 GET /media/:id
-    processMediaJob(id, kind, prompt, opts);
+    processMediaJob(id, kind, finalPrompt, opts);
+    logAiRun(req, { kind: 'media', refId: kind, prompt: finalPrompt, output: '', model: '' });
     res.json({ id, status: 'pending' });
   } catch (err) {
     res.status(500).json({ error: err.message });

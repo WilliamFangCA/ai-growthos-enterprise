@@ -17,11 +17,27 @@ export const SUPPORTED_TYPES = {
 const TEXT_LIMIT = 50000; // chars sent to AI
 
 export function getFileCategory(file) {
-  if (SUPPORTED_TYPES.image.includes(file.type)) return 'image';
+  if (SUPPORTED_TYPES.image.includes(file.type) || (file.type || '').startsWith('image/')) return 'image';
   if (SUPPORTED_TYPES.pdf.includes(file.type) || file.name.toLowerCase().endsWith('.pdf')) return 'pdf';
   if (SUPPORTED_TYPES.docx.includes(file.type) || file.name.match(/\.docx?$/i)) return 'docx';
+  if ((file.type || '').startsWith('audio/') || file.name.match(/\.(mp3|wav|m4a|aac|ogg|flac)$/i)) return 'audio';
+  if ((file.type || '').startsWith('video/') || file.name.match(/\.(mp4|mov|avi|mkv|webm|m4v)$/i)) return 'video';
   if (SUPPORTED_TYPES.text.includes(file.type) || file.name.match(/\.(md|txt|csv|json|yaml|yml|xml|html|css|js|ts)$/i)) return 'text';
   return 'unknown';
+}
+
+// 讀取音／視訊長度（秒），失敗回 0
+function readMediaDuration(file, kind) {
+  return new Promise((resolve) => {
+    try {
+      const el = document.createElement(kind === 'video' ? 'video' : 'audio');
+      el.preload = 'metadata';
+      el.onloadedmetadata = () => { const d = el.duration; URL.revokeObjectURL(el.src); resolve(Number.isFinite(d) ? Math.round(d) : 0); };
+      el.onerror = () => resolve(0);
+      el.src = URL.createObjectURL(file);
+      setTimeout(() => resolve(0), 4000);
+    } catch { resolve(0); }
+  });
 }
 
 function toBase64(file) {
@@ -127,6 +143,11 @@ export async function processFile(file) {
     return { name: file.name, type: 'docx', text, size: file.size };
   }
 
+  if (category === 'audio' || category === 'video') {
+    const duration = await readMediaDuration(file, category);
+    return { name: file.name, type: category, mimeType: file.type || category, size: file.size, duration };
+  }
+
   if (category === 'text') {
     const raw = await toText(file);
     return { name: file.name, type: 'text', text: truncate(raw), size: file.size };
@@ -152,5 +173,7 @@ export const FILE_ICON = {
   pdf:     '📄',
   docx:    '📝',
   text:    '📃',
+  audio:   '🎵',
+  video:   '🎬',
   unknown: '📎',
 };
