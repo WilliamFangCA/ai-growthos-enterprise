@@ -5,26 +5,110 @@ const db = { transaction: (fn) => getDb().transaction(fn) };
 const { callAI } = require('../aiRouter');
 const { readKnowledgeBase } = require('./hub-settings');
 const { getGlobalKBText } = require('./global-kb');
+const { encrypt, decrypt, mask } = require('../services/secretBox');
+const channelAdapter = require('../services/channelAdapter');
+
+// 各平台連接所需欄位 + webhook 路徑說明（前端「連接」表單依此渲染）
+const PLATFORM_GUIDE = {
+  line:      { label: 'LINE 官方帳號', needs: ['access_token', 'channel_secret'], recipient: 'userId', webhook: '/api/webhooks/line/:id', doc: 'LINE Developers → Messaging API → Channel access token + Channel secret' },
+  telegram:  { label: 'Telegram Bot', needs: ['access_token'], recipient: 'chatId', webhook: '/api/webhooks/telegram/:id', doc: 'BotFather → /newbot 取得 Bot Token' },
+  messenger: { label: 'Facebook Messenger', needs: ['access_token', 'channel_secret'], recipient: 'PSID', webhook: '/api/webhooks/meta/:id', doc: 'Meta for Developers → Page Access Token + App Secret' },
+  instagram: { label: 'Instagram DM', needs: ['access_token', 'channel_secret'], recipient: 'IGSID', webhook: '/api/webhooks/meta/:id', doc: 'Meta for Developers → IG Page Access Token + App Secret' },
+  whatsapp:  { label: 'WhatsApp Business', needs: ['access_token', 'channel_id'], recipient: '電話號碼', webhook: '/api/webhooks/meta/:id', doc: 'Meta → WhatsApp Cloud API → Phone Number ID (填 channel_id) + Access Token' },
+  email:     { label: 'Email', needs: [], recipient: 'email', webhook: null, doc: '尚未支援真實連接' },
+};
+
+// 對外安全序列化：永不回傳明文憑證，只給遮罩 + 是否已設定
+function publicAccount(a) {
+  if (!a) return a;
+  const guide = PLATFORM_GUIDE[a.platform] || {};
+  return {
+    id: a.id, platform: a.platform, account_name: a.account_name, channel_id: a.channel_id,
+    webhook_url: a.webhook_url, status: a.status,
+    connection_status: a.connection_status || 'demo',
+    connection_mode: a.connection_mode || 'demo',
+    platform_user_id: a.platform_user_id || null,
+    last_verified_at: a.last_verified_at || null,
+    last_error: a.last_error || null,
+    has_access_token: !!a.access_token,
+    has_channel_secret: !!a.channel_secret,
+    access_token_masked: a.access_token ? mask(decrypt(a.access_token)) : '',
+    guide,
+    created_at: a.created_at,
+  };
+}
 
 // GET /api/comms/accounts
 router.get('/accounts', (req, res) => {
   try {
     const accounts = all('SELECT * FROM comm_accounts ORDER BY created_at DESC');
-    res.json(accounts);
+    res.json(accounts.map(publicAccount));
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
 
-// POST /api/comms/accounts
+// GET /api/comms/platform-guide — 前端連接表單用
+router.get('/platform-guide', (req, res) => res.json(PLATFORM_GUIDE));
+
+// POST /api/comms/accounts — 新增帳號（不含憑證，預設 disconnected）
 router.post('/accounts', (req, res) => {
   const { platform, account_name, channel_id, webhook_url } = req.body;
   if (!platform || !account_name) return res.status(400).json({ error: 'platform and account_name required' });
   try {
-    run('INSERT INTO comm_accounts (platform, account_name, channel_id, webhook_url) VALUES (?,?,?,?)',
+    run(`INSERT INTO comm_accounts (platform, account_name, channel_id, webhook_url, connection_status, connection_mode) VALUES (?,?,?,?, 'disconnected', 'real')`,
       [platform, account_name, channel_id || null, webhook_url || null]);
-    const account = get('SELECT * FROM comm_accounts WHERE id = last_insert_rowid()');
-    res.json(account);
+    res.json(publicAccount(get('SELECT * FROM comm_accounts WHERE id = last_insert_rowid()')));
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/comms/accounts/:id/connect — 填入真實憑證，線上驗證後標記 connected
+router.post('/accounts/:id/connect', async (req, res) => {
+  const { access_token, channel_secret, channel_id } = req.body || {};
+  try {
+    const acct = get('SELECT * FROM comm_accounts WHERE id = ?', [req.params.id]);
+    if (!acct) return res.status(404).json({ error: 'account not found' });
+    if (!access_token && !acct.access_token) return res.status(400).json({ error: 'access_token required' });
+
+    const creds = {
+      access_token: access_token || decrypt(acct.access_token),
+      channel_secret: channel_secret || decrypt(acct.channel_secret),
+      channel_id: channel_id || acct.channel_id,
+    };
+    const verified = await channelAdapter.verifyAccount(acct.platform, creds);
+    if (!verified.ok) {
+      run('UPDATE comm_accounts SET connection_status = ?, last_error = ? WHERE id = ?', ['error', verified.error, acct.id]);
+      return res.status(400).json({ error: verified.error, connection_status: 'error' });
+    }
+    run(`UPDATE comm_accounts SET access_token = ?, channel_secret = ?, channel_id = ?,
+         platform_user_id = ?, connection_status = 'connected', connection_mode = 'real',
+         last_verified_at = CURRENT_TIMESTAMP, last_error = NULL, status = 'active' WHERE id = ?`,
+      [encrypt(creds.access_token), encrypt(creds.channel_secret), creds.channel_id,
+       verified.info?.platform_user_id || null, acct.id]);
+    res.json({ ok: true, info: verified.info, account: publicAccount(get('SELECT * FROM comm_accounts WHERE id = ?', [acct.id])) });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/comms/accounts/:id/disconnect — 清除憑證
+router.post('/accounts/:id/disconnect', (req, res) => {
+  try {
+    run(`UPDATE comm_accounts SET access_token = NULL, channel_secret = NULL, refresh_token = NULL,
+         connection_status = 'disconnected', last_error = NULL WHERE id = ?`, [req.params.id]);
+    res.json({ ok: true, account: publicAccount(get('SELECT * FROM comm_accounts WHERE id = ?', [req.params.id])) });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// DELETE /api/comms/accounts/:id
+router.delete('/accounts/:id', (req, res) => {
+  try {
+    run('DELETE FROM comm_accounts WHERE id = ?', [req.params.id]);
+    res.json({ ok: true });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -283,6 +367,43 @@ router.post('/webhook/simulate', async (req, res) => {
   }
 });
 
+// ── 真實入站訊息處理（webhooks 共用）─────────────────────────────────────
+// account = comm_accounts row（真實連接）；找/建對話 → 存入站 → 跑 AI → 真實推送回覆
+async function processInboundMessage(account, platformUserId, text, displayName) {
+  const platform = account.platform;
+  const convo = db.transaction(() => {
+    let existing = get(
+      'SELECT * FROM conversations WHERE platform = ? AND comm_account_id = ? AND channel_user_id = ? ORDER BY created_at DESC LIMIT 1',
+      [platform, account.id, platformUserId]
+    );
+    if (!existing) {
+      run(
+        'INSERT INTO conversations (platform, comm_account_id, contact_name, channel_user_id, last_message, assigned_to, status, unread_count) VALUES (?,?,?,?,?,?,?,?)',
+        [platform, account.id, displayName || platformUserId, platformUserId, text, 'ai', 'open', 0]
+      );
+      existing = get('SELECT * FROM conversations WHERE id = last_insert_rowid()');
+    }
+    return existing;
+  })();
+
+  run('INSERT INTO messages (conversation_id, direction, content, message_type, sent_by) VALUES (?,?,?,?,?)',
+    [convo.id, 'inbound', text, 'text', 'human']);
+  run('UPDATE conversations SET unread_count = unread_count + 1, last_message = ?, last_message_at = CURRENT_TIMESTAMP WHERE id = ?',
+    [text, convo.id]);
+
+  const engineResult = await runAIRulesEngine(convo.id, platform, text);
+
+  // 真實回覆推送：AI 有產出且帳號為真實連接時，送回平台
+  let delivery = null;
+  if (engineResult.aiReply) {
+    delivery = await channelAdapter.sendViaAccount(account, platformUserId, engineResult.aiReply);
+    if (delivery.status === 'error') {
+      run('UPDATE comm_accounts SET last_error = ? WHERE id = ?', [delivery.error, account.id]);
+    }
+  }
+  return { conversationId: convo.id, ...engineResult, delivery };
+}
+
 // GET /api/comms/stats
 router.get('/stats', (req, res) => {
   try {
@@ -300,3 +421,5 @@ router.get('/stats', (req, res) => {
 });
 
 module.exports = router;
+module.exports.runAIRulesEngine = runAIRulesEngine;
+module.exports.processInboundMessage = processInboundMessage;

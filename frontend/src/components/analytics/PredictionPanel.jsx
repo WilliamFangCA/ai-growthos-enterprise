@@ -71,13 +71,36 @@ export default function PredictionPanel() {
   const fileInputRef = useRef(null);
   const pollRef = useRef(null);
 
+  // 音訊/影片自動上傳轉錄（Whisper → Gemini），結果回填為逐字稿
+  const transcribeFile = async (file, id) => {
+    try {
+      const r = await apiFetch(`/api/predictions/transcribe?filename=${encodeURIComponent(file.name)}`, {
+        method: 'POST', headers: { 'Content-Type': file.type || 'application/octet-stream' }, body: file,
+      });
+      const d = await r.json();
+      setFiles(prev => prev.map(f => f.id === id
+        ? { ...f, transcribing: false, transcript: d.text || '', text: d.text || '', sttProvider: d.provider, sttError: d.error || (d.text ? '' : '轉錄無內容') }
+        : f));
+    } catch (_) {
+      setFiles(prev => prev.map(f => f.id === id ? { ...f, transcribing: false, sttError: '轉錄失敗' } : f));
+    }
+  };
+
   const onPickFiles = async (e) => {
     const picked = Array.from(e.target.files || []);
     e.target.value = '';
     if (!picked.length) return;
     setFileBusy(true);
-    for (const f of picked) {
-      try { const p = await processFile(f); setFiles(prev => [...prev, p]); } catch (_) {}
+    for (const file of picked) {
+      try {
+        const p = await processFile(file);
+        const id = `${file.name}-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+        const entry = { ...p, id };
+        const isMedia = p.type === 'audio' || p.type === 'video';
+        if (isMedia) entry.transcribing = true;
+        setFiles(prev => [...prev, entry]);
+        if (isMedia) transcribeFile(file, id); // 背景轉錄，不阻塞
+      } catch (_) {}
     }
     setFileBusy(false);
   };
@@ -137,8 +160,14 @@ export default function PredictionPanel() {
           attachments.push({ name: f.name, kind: 'image' });
         } else if (f.type === 'audio' || f.type === 'video') {
           const dur = f.duration ? `${Math.floor(f.duration / 60)}分${f.duration % 60}秒` : '';
-          mediaParts.push(`• ${f.name}（${f.type === 'audio' ? '音訊' : '影片'}${dur ? `，${dur}` : ''}，${formatFileSize(f.size)}）`);
-          attachments.push({ name: f.name, kind: f.type, note: dur });
+          const kindLabel = f.type === 'audio' ? '音訊' : '影片';
+          if (f.transcript && f.transcript.trim()) {
+            docParts.push(`--- ${f.name}（${kindLabel}逐字稿${dur ? `，${dur}` : ''}）---\n${f.transcript.trim()}`);
+            attachments.push({ name: f.name, kind: f.type, note: '已轉錄' });
+          } else {
+            mediaParts.push(`• ${f.name}（${kindLabel}${dur ? `，${dur}` : ''}，${formatFileSize(f.size)}，未轉錄）`);
+            attachments.push({ name: f.name, kind: f.type, note: dur });
+          }
         } else {
           docParts.push(`--- ${f.name} ---\n${f.text || ''}`);
           attachments.push({ name: f.name, kind: f.type });
@@ -222,19 +251,29 @@ export default function PredictionPanel() {
               }}>{fileBusy ? '處理中…' : '＋ 選擇檔案上傳'}</button>
               {files.length > 0 && (
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 8 }}>
-                  {files.map((f, i) => (
-                    <span key={i} style={{
-                      display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 11, color: COL.text,
-                      background: COL.inner, border: `1px solid ${COL.border}`, borderRadius: 999, padding: '3px 9px',
-                    }}>
-                      {FILE_ICON[f.type] || '📎'} {f.name.length > 18 ? f.name.slice(0, 16) + '…' : f.name}
-                      <span style={{ color: COL.faint }}>{formatFileSize(f.size)}</span>
-                      <span onClick={() => removeFile(i)} style={{ cursor: 'pointer', color: COL.faint, marginLeft: 2 }}>✕</span>
-                    </span>
-                  ))}
+                  {files.map((f, i) => {
+                    const isMedia = f.type === 'audio' || f.type === 'video';
+                    let stt = null;
+                    if (isMedia) {
+                      if (f.transcribing) stt = <span style={{ color: COL.accent }}>· 轉錄中…</span>;
+                      else if (f.transcript) stt = <span style={{ color: '#10b981' }} title={`由 ${f.sttProvider || 'STT'} 轉錄`}>· ✓ 已轉錄</span>;
+                      else if (f.sttError) stt = <span style={{ color: '#f59e0b' }} title={f.sttError}>· ⚠ 未轉錄</span>;
+                    }
+                    return (
+                      <span key={f.id || i} style={{
+                        display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 11, color: COL.text,
+                        background: COL.inner, border: `1px solid ${COL.border}`, borderRadius: 999, padding: '3px 9px',
+                      }}>
+                        {FILE_ICON[f.type] || '📎'} {f.name.length > 16 ? f.name.slice(0, 14) + '…' : f.name}
+                        <span style={{ color: COL.faint }}>{formatFileSize(f.size)}</span>
+                        {stt}
+                        <span onClick={() => removeFile(i)} style={{ cursor: 'pointer', color: COL.faint, marginLeft: 2 }}>✕</span>
+                      </span>
+                    );
+                  })}
                 </div>
               )}
-              <div style={{ fontSize: 10, color: COL.faint, marginTop: 4 }}>文件→文字萃取 · 圖片→AI 視覺判讀 · 音訊/影片→佐證材料記錄</div>
+              <div style={{ fontSize: 10, color: COL.faint, marginTop: 4 }}>文件→文字萃取 · 圖片→AI 視覺判讀 · 音訊/影片→自動轉錄逐字稿（Whisper／Gemini，上限 25MB）</div>
             </Field>
             <Field label="情境變數（選填，可注入假設，逗號分隔）">
               <input value={form.variables} onChange={e => setForm({ ...form, variables: e.target.value })}

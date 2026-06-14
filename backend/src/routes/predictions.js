@@ -7,6 +7,7 @@ const express = require('express');
 const router = express.Router();
 const { run, get, all } = require('../db');
 const { runPrediction, setPredictionInputs } = require('../services/predictionEngine');
+const { transcribe } = require('../services/sttRouter');
 
 function parseResult(row) {
   if (!row) return row;
@@ -84,6 +85,21 @@ router.post('/', (req, res) => {
     runPrediction(id).catch(err => console.error('[predictions] runPrediction error:', err));
 
     res.status(201).json({ id, status: 'pending', stage: 'queued' });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/predictions/transcribe?filename=xxx — 音訊/影片轉錄（Whisper → Gemini）
+// 以 raw binary 上傳（避免 base64 膨脹）；content-type 帶原始 mime；回 { text, provider, chars }
+router.post('/transcribe', express.raw({ type: () => true, limit: '60mb' }), async (req, res) => {
+  try {
+    const buf = req.body;
+    if (!buf || !buf.length) return res.status(400).json({ error: '未收到檔案內容' });
+    const filename = String(req.query.filename || 'media').slice(0, 200);
+    const mimeType = req.headers['content-type'] || 'application/octet-stream';
+    const r = await transcribe(buf, filename, mimeType);
+    res.json({ text: r.text, provider: r.provider, chars: r.text.length });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

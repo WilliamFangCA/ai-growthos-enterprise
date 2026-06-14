@@ -40,6 +40,11 @@ const SECTIONS = [
     fields: [],
   },
   {
+    id: 'billing', icon: '💳',
+    label: { en: 'Subscription & Billing', 'zh-TW': '訂閱與金流', 'zh-CN': '订阅与支付' },
+    fields: [],
+  },
+  {
     id: 'knowledge', icon: '📚',
     label: { en: 'Knowledge Bases', 'zh-TW': '知識庫', 'zh-CN': '知识库' },
     fields: [],
@@ -1303,6 +1308,12 @@ function MessagingSection({ colors }) {
 
   return (
     <div>
+      {/* 真實連接面板（接後端 /api/comms/accounts，憑證加密儲存、線上驗證）*/}
+      <RealConnectionsPanel colors={colors} />
+
+      <div style={{ fontSize: 11, color: colors.textDim, margin: '24px 0 8px', letterSpacing: '0.04em', textTransform: 'uppercase', fontWeight: 600 }}>
+        草稿（僅存本地瀏覽器，未實際連接平台）
+      </div>
       {accounts.map(account => (
         <AccountCard
           key={account.id}
@@ -1315,13 +1326,13 @@ function MessagingSection({ colors }) {
 
       {accounts.length === 0 && (
         <div style={{
-          textAlign: 'center', padding: '36px 20px',
-          color: colors.textDim, fontSize: 13,
+          textAlign: 'center', padding: '24px 20px',
+          color: colors.textDim, fontSize: 12,
           background: colors.card,
           border: `1px dashed ${colors.border}`,
           borderRadius: 12, marginBottom: 12,
         }}>
-          尚未新增任何通訊帳號，點擊下方按鈕開始新增
+          本地草稿區（不會真正連接平台）。真實連接請用上方面板。
         </div>
       )}
 
@@ -1354,7 +1365,360 @@ function MessagingSection({ colors }) {
   );
 }
 
+// ─── RealConnectionsPanel（通訊：真實後端連接 + 誠實狀態）─────────────────────
+
+const CONNECT_PLATFORMS = [
+  { id: 'line', name: 'LINE 官方帳號' },
+  { id: 'telegram', name: 'Telegram Bot' },
+  { id: 'messenger', name: 'Facebook Messenger' },
+  { id: 'instagram', name: 'Instagram DM' },
+  { id: 'whatsapp', name: 'WhatsApp Business' },
+];
+
+const STATUS_BADGE = {
+  connected:    { label: '已連接（真實）', color: '#10b981' },
+  demo:         { label: 'Demo 示範',      color: '#6b7280' },
+  disconnected: { label: '未連接',          color: '#f59e0b' },
+  error:        { label: '連接錯誤',        color: '#ef4444' },
+};
+
+function RealConnectionsPanel({ colors }) {
+  const [accounts, setAccounts] = useState([]);
+  const [guide, setGuide] = useState({});
+  const [newPlatform, setNewPlatform] = useState('line');
+  const [newName, setNewName] = useState('');
+  const [editId, setEditId] = useState(null);
+  const [form, setForm] = useState({ access_token: '', channel_secret: '', channel_id: '' });
+  const [msg, setMsg] = useState(null);
+  const [busy, setBusy] = useState(false);
+
+  async function load() {
+    try {
+      const [a, g] = await Promise.all([
+        apiFetch('/api/comms/accounts').then(r => r.json()),
+        apiFetch('/api/comms/platform-guide').then(r => r.json()),
+      ]);
+      setAccounts(Array.isArray(a) ? a : []);
+      setGuide(g || {});
+    } catch (e) { setMsg({ type: 'err', text: '載入失敗：' + e.message }); }
+  }
+  useEffect(() => { load(); }, []);
+
+  async function addAccount() {
+    if (!newName.trim()) { setMsg({ type: 'err', text: '請輸入帳號名稱' }); return; }
+    setBusy(true);
+    try {
+      await apiFetch('/api/comms/accounts', { method: 'POST', body: JSON.stringify({ platform: newPlatform, account_name: newName.trim() }) });
+      setNewName(''); setMsg(null); await load();
+    } catch (e) { setMsg({ type: 'err', text: e.message }); }
+    setBusy(false);
+  }
+
+  async function connect(acct) {
+    setBusy(true); setMsg(null);
+    try {
+      const r = await apiFetch(`/api/comms/accounts/${acct.id}/connect`, { method: 'POST', body: JSON.stringify(form) });
+      const j = await r.json();
+      if (!r.ok) { setMsg({ type: 'err', text: '驗證失敗：' + (j.error || '') }); }
+      else { setMsg({ type: 'ok', text: `已連接：${j.info?.name || acct.account_name}` }); setEditId(null); setForm({ access_token: '', channel_secret: '', channel_id: '' }); }
+      await load();
+    } catch (e) { setMsg({ type: 'err', text: e.message }); }
+    setBusy(false);
+  }
+
+  async function disconnect(id) {
+    setBusy(true);
+    try { await apiFetch(`/api/comms/accounts/${id}/disconnect`, { method: 'POST' }); await load(); } catch (e) { setMsg({ type: 'err', text: e.message }); }
+    setBusy(false);
+  }
+  async function del(id) {
+    if (!window.confirm('刪除此帳號？')) return;
+    setBusy(true);
+    try { await apiFetch(`/api/comms/accounts/${id}`, { method: 'DELETE' }); await load(); } catch (e) {}
+    setBusy(false);
+  }
+
+  const origin = typeof window !== 'undefined' ? window.location.origin : '';
+
+  return (
+    <div>
+      <div style={{ fontSize: 11, color: colors.textDim, marginBottom: 8, letterSpacing: '0.04em', textTransform: 'uppercase', fontWeight: 600 }}>
+        真實連接（憑證加密儲存於伺服器，線上驗證）
+      </div>
+
+      {msg && (
+        <div style={{ padding: '8px 12px', borderRadius: 8, marginBottom: 10, fontSize: 12,
+          background: msg.type === 'ok' ? 'rgba(16,185,129,0.12)' : 'rgba(239,68,68,0.12)',
+          color: msg.type === 'ok' ? '#10b981' : '#ef4444' }}>{msg.text}</div>
+      )}
+
+      {accounts.map(a => {
+        const badge = STATUS_BADGE[a.connection_status] || STATUS_BADGE.disconnected;
+        const g = a.guide || guide[a.platform] || {};
+        const needs = g.needs || [];
+        const webhookUrl = g.webhook ? origin + g.webhook.replace(':id', a.id) : null;
+        const editing = editId === a.id;
+        return (
+          <div key={a.id} style={{ background: colors.card, border: `1px solid ${colors.border}`, borderRadius: 12, padding: 14, marginBottom: 10 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+              <span style={{ fontSize: 13, fontWeight: 700, color: colors.text }}>{a.account_name}</span>
+              <span style={{ fontSize: 11, color: colors.textDim }}>{g.label || a.platform}</span>
+              <span style={{ marginLeft: 'auto', fontSize: 11, fontWeight: 600, color: badge.color, background: badge.color + '20', padding: '2px 8px', borderRadius: 6 }}>● {badge.label}</span>
+            </div>
+            {a.last_error && a.connection_status === 'error' && (
+              <div style={{ fontSize: 11, color: '#ef4444', marginTop: 6 }}>{a.last_error}</div>
+            )}
+            {a.connection_status === 'connected' && a.platform_user_id && (
+              <div style={{ fontSize: 11, color: colors.textDim, marginTop: 6 }}>平台 ID：{a.platform_user_id}　憑證：{a.access_token_masked}</div>
+            )}
+            {webhookUrl && (
+              <div style={{ fontSize: 11, color: colors.textDim, marginTop: 6, wordBreak: 'break-all' }}>
+                Webhook URL（填到平台後台）：<code style={{ color: colors.text }}>{webhookUrl}</code>
+              </div>
+            )}
+
+            {editing ? (
+              <div style={{ marginTop: 10, display: 'flex', flexDirection: 'column', gap: 8 }}>
+                <input placeholder="Access Token" value={form.access_token} onChange={e => setForm({ ...form, access_token: e.target.value })}
+                  style={inp(colors)} />
+                {needs.includes('channel_secret') && (
+                  <input placeholder="Channel Secret / App Secret" value={form.channel_secret} onChange={e => setForm({ ...form, channel_secret: e.target.value })} style={inp(colors)} />
+                )}
+                {needs.includes('channel_id') && (
+                  <input placeholder="Phone Number ID（WhatsApp）" value={form.channel_id} onChange={e => setForm({ ...form, channel_id: e.target.value })} style={inp(colors)} />
+                )}
+                {g.doc && <div style={{ fontSize: 11, color: colors.textDim }}>取得方式：{g.doc}</div>}
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <button disabled={busy} onClick={() => connect(a)} style={btn('#3b82f6')}>驗證並連接</button>
+                  <button onClick={() => { setEditId(null); setForm({ access_token: '', channel_secret: '', channel_id: '' }); }} style={btnGhost(colors)}>取消</button>
+                </div>
+              </div>
+            ) : (
+              <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
+                <button onClick={() => { setEditId(a.id); setForm({ access_token: '', channel_secret: '', channel_id: '' }); setMsg(null); }} style={btn('#3b82f6')}>
+                  {a.connection_status === 'connected' ? '重新連接' : '填入憑證連接'}
+                </button>
+                {a.connection_status === 'connected' && <button disabled={busy} onClick={() => disconnect(a.id)} style={btnGhost(colors)}>中斷連接</button>}
+                <button disabled={busy} onClick={() => del(a.id)} style={{ ...btnGhost(colors), color: '#ef4444', marginLeft: 'auto' }}>刪除</button>
+              </div>
+            )}
+          </div>
+        );
+      })}
+
+      {/* 新增真實帳號 */}
+      <div style={{ background: colors.card, border: `1px dashed ${colors.border}`, borderRadius: 12, padding: 12, display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+        <select value={newPlatform} onChange={e => setNewPlatform(e.target.value)} style={{ ...inp(colors), width: 'auto', flex: '0 0 auto' }}>
+          {CONNECT_PLATFORMS.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+        </select>
+        <input placeholder="帳號名稱（例如：主店 LINE）" value={newName} onChange={e => setNewName(e.target.value)} style={{ ...inp(colors), flex: 1, minWidth: 140 }} />
+        <button disabled={busy} onClick={addAccount} style={btn('#10b981')}>＋ 新增真實帳號</button>
+      </div>
+    </div>
+  );
+}
+
+function inp(colors) {
+  return { width: '100%', padding: '8px 10px', borderRadius: 8, background: colors.inputBg, border: `1px solid ${colors.inputBorder}`, color: colors.text, fontSize: 13, outline: 'none', boxSizing: 'border-box' };
+}
+function btn(bg) {
+  return { padding: '7px 14px', borderRadius: 8, border: 'none', cursor: 'pointer', background: bg, color: '#fff', fontSize: 12, fontWeight: 600 };
+}
+function btnGhost(colors) {
+  return { padding: '7px 14px', borderRadius: 8, border: `1px solid ${colors.border}`, cursor: 'pointer', background: 'transparent', color: colors.textMuted, fontSize: 12, fontWeight: 600 };
+}
+
+// ─── BillingSection（藍新金流訂閱）────────────────────────────────────────────
+
+function BillingSection({ colors }) {
+  const [status, setStatus] = useState(null);
+  const [plans, setPlans] = useState([]);
+  const [orders, setOrders] = useState([]);
+  const [busy, setBusy] = useState('');
+  const [banner, setBanner] = useState(null);
+
+  async function load() {
+    try {
+      const [s, p, o] = await Promise.all([
+        apiFetch('/api/payments/status').then(r => r.json()),
+        apiFetch('/api/payments/plans').then(r => r.json()),
+        apiFetch('/api/payments/orders').then(r => r.json()).catch(() => []),
+      ]);
+      setStatus(s); setPlans(Array.isArray(p) ? p : []); setOrders(Array.isArray(o) ? o : []);
+    } catch (_) {}
+  }
+  useEffect(() => {
+    load();
+    const q = new URLSearchParams(window.location.search);
+    if (q.get('payment')) {
+      setBanner(q.get('payment') === 'success' ? { type: 'ok', text: `付款成功！訂單 ${q.get('order') || ''}` } : { type: 'err', text: '付款未完成或失敗，請重試。' });
+    }
+  }, []);
+
+  async function checkout(planId) {
+    setBusy(planId);
+    try {
+      const r = await apiFetch('/api/payments/checkout', { method: 'POST', body: JSON.stringify({ plan: planId }) });
+      const j = await r.json();
+      if (!r.ok) { setBanner({ type: 'err', text: j.error || '結帳失敗' }); setBusy(''); return; }
+      // 動態建立表單自動送出到藍新金流付款頁
+      const f = document.createElement('form');
+      f.method = 'POST'; f.action = j.actionUrl;
+      Object.entries(j.fields).forEach(([k, v]) => {
+        const i = document.createElement('input'); i.type = 'hidden'; i.name = k; i.value = v; f.appendChild(i);
+      });
+      document.body.appendChild(f); f.submit();
+    } catch (e) { setBanner({ type: 'err', text: e.message }); setBusy(''); }
+  }
+
+  const configured = status?.configured;
+
+  return (
+    <div>
+      {banner && (
+        <div style={{ padding: '10px 14px', borderRadius: 8, marginBottom: 14, fontSize: 13,
+          background: banner.type === 'ok' ? 'rgba(16,185,129,0.12)' : 'rgba(239,68,68,0.12)',
+          color: banner.type === 'ok' ? '#10b981' : '#ef4444' }}>{banner.text}</div>
+      )}
+
+      {!configured && (
+        <div style={{ padding: '12px 14px', borderRadius: 10, marginBottom: 16, fontSize: 12,
+          background: 'rgba(245,158,11,0.12)', color: '#f59e0b', border: '1px solid rgba(245,158,11,0.3)' }}>
+          ⚠️ 金流尚未設定。請於 <code>.env</code> 填入 <code>NEWEBPAY_MERCHANT_ID</code> / <code>NEWEBPAY_HASH_KEY</code> / <code>NEWEBPAY_HASH_IV</code>（藍新金流商店後台取得），結帳功能才會啟用。目前環境：{status?.env || '—'}
+        </div>
+      )}
+
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 12, marginBottom: 24 }}>
+        {plans.map(p => (
+          <div key={p.id} style={{ background: colors.card, border: `1px solid ${colors.border}`, borderRadius: 12, padding: 18 }}>
+            <div style={{ fontSize: 15, fontWeight: 700, color: colors.text }}>{p.name}</div>
+            <div style={{ fontSize: 24, fontWeight: 800, color: colors.text, margin: '8px 0' }}>NT${p.amount.toLocaleString()}<span style={{ fontSize: 12, fontWeight: 400, color: colors.textDim }}>/月</span></div>
+            <div style={{ fontSize: 12, color: colors.textDim, marginBottom: 14, minHeight: 32 }}>{p.desc}</div>
+            <button disabled={!configured || busy === p.id} onClick={() => checkout(p.id)}
+              style={{ width: '100%', padding: '9px', borderRadius: 8, border: 'none',
+                cursor: configured ? 'pointer' : 'not-allowed',
+                background: configured ? 'linear-gradient(90deg,#3b82f6,#8b5cf6)' : colors.inputBg,
+                color: configured ? '#fff' : colors.textDim, fontSize: 13, fontWeight: 600 }}>
+              {busy === p.id ? '前往付款…' : configured ? '訂閱' : '金流未設定'}
+            </button>
+          </div>
+        ))}
+      </div>
+
+      <div style={{ fontSize: 11, color: colors.textDim, marginBottom: 8, letterSpacing: '0.04em', textTransform: 'uppercase', fontWeight: 600 }}>近期訂單</div>
+      {orders.length === 0 ? (
+        <div style={{ fontSize: 12, color: colors.textDim, padding: 16, background: colors.card, border: `1px dashed ${colors.border}`, borderRadius: 10 }}>尚無訂單</div>
+      ) : (
+        <div style={{ background: colors.card, border: `1px solid ${colors.border}`, borderRadius: 10, overflow: 'hidden' }}>
+          {orders.map(o => (
+            <div key={o.merchant_order_no} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', borderBottom: `1px solid ${colors.border}`, fontSize: 12 }}>
+              <span style={{ color: colors.text, fontWeight: 600 }}>{o.plan}</span>
+              <span style={{ color: colors.textDim }}>NT${(o.amount || 0).toLocaleString()}</span>
+              <span style={{ color: colors.textDim, fontFamily: 'monospace', fontSize: 11 }}>{o.merchant_order_no}</span>
+              <span style={{ marginLeft: 'auto', fontWeight: 600, color: o.status === 'paid' ? '#10b981' : o.status === 'failed' ? '#ef4444' : '#f59e0b' }}>
+                {o.status === 'paid' ? '已付款' : o.status === 'failed' ? '失敗' : '待付款'}
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── EcommerceSection ─────────────────────────────────────────────────────────
+
+function EcommerceRealPanel({ colors }) {
+  const [platforms, setPlatforms] = useState([]);
+  const [connections, setConnections] = useState([]);
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState(null);
+
+  async function load() {
+    try {
+      const [p, c] = await Promise.all([
+        apiFetch('/api/ecommerce/platforms').then(r => r.json()),
+        apiFetch('/api/ecommerce/connections').then(r => r.json()),
+      ]);
+      setPlatforms(Array.isArray(p) ? p : []); setConnections(Array.isArray(c) ? c : []);
+    } catch (_) {}
+  }
+  useEffect(() => {
+    load();
+    const q = new URLSearchParams(window.location.search);
+    if (q.get('ecommerce')) setMsg(q.get('ecommerce') === 'connected' ? { type: 'ok', text: 'Shopee 已連接' } : { type: 'err', text: 'Shopee 連接失敗' });
+  }, []);
+
+  async function connectShopee() {
+    setBusy(true);
+    try {
+      const r = await apiFetch('/api/ecommerce/shopee/auth-url');
+      const j = await r.json();
+      if (j.url) window.location.href = j.url;
+      else setMsg({ type: 'err', text: j.error || '無法取得授權連結' });
+    } catch (e) { setMsg({ type: 'err', text: e.message }); }
+    setBusy(false);
+  }
+  async function sync(id) {
+    setBusy(true);
+    try { const r = await apiFetch(`/api/ecommerce/connections/${id}/sync`, { method: 'POST' }); const j = await r.json(); setMsg({ type: r.ok ? 'ok' : 'err', text: r.ok ? '同步完成' : (j.error || '同步失敗') }); await load(); } catch (e) { setMsg({ type: 'err', text: e.message }); }
+    setBusy(false);
+  }
+  async function disconnect(id) {
+    if (!window.confirm('中斷此電商連接？')) return;
+    setBusy(true);
+    try { await apiFetch(`/api/ecommerce/connections/${id}`, { method: 'DELETE' }); await load(); } catch (_) {}
+    setBusy(false);
+  }
+
+  const shopee = platforms.find(p => p.id === 'shopee');
+
+  return (
+    <div>
+      <div style={{ fontSize: 11, color: colors.textDim, marginBottom: 8, letterSpacing: '0.04em', textTransform: 'uppercase', fontWeight: 600 }}>真實連接</div>
+      {msg && (
+        <div style={{ padding: '8px 12px', borderRadius: 8, marginBottom: 10, fontSize: 12,
+          background: msg.type === 'ok' ? 'rgba(16,185,129,0.12)' : 'rgba(239,68,68,0.12)', color: msg.type === 'ok' ? '#10b981' : '#ef4444' }}>{msg.text}</div>
+      )}
+
+      {/* Shopee 真實串接 */}
+      <div style={{ background: colors.card, border: `1px solid ${colors.border}`, borderRadius: 12, padding: 14, marginBottom: 10 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <span style={{ fontSize: 14, fontWeight: 700, color: colors.text }}>🛒 Shopee 蝦皮</span>
+          <span style={{ fontSize: 11, color: colors.textDim }}>OAuth 真實授權</span>
+          <span style={{ marginLeft: 'auto', fontSize: 11, fontWeight: 600,
+            color: shopee?.configured ? '#10b981' : '#f59e0b', background: (shopee?.configured ? '#10b981' : '#f59e0b') + '20', padding: '2px 8px', borderRadius: 6 }}>
+            {shopee?.configured ? '可連接' : '需設定金鑰'}
+          </span>
+        </div>
+        {!shopee?.configured && (
+          <div style={{ fontSize: 11, color: colors.textDim, marginTop: 8 }}>請於 .env 填入 <code>SHOPEE_PARTNER_ID</code> / <code>SHOPEE_PARTNER_KEY</code>（Shopee Open Platform 取得）後啟用。</div>
+        )}
+        <div style={{ marginTop: 10 }}>
+          <button disabled={!shopee?.configured || busy} onClick={connectShopee} style={btn(shopee?.configured ? '#ee4d2d' : '#9ca3af')}>連接 Shopee 賣場</button>
+        </div>
+      </div>
+
+      {connections.map(c => (
+        <div key={c.id} style={{ background: colors.card, border: `1px solid ${colors.border}`, borderRadius: 12, padding: 14, marginBottom: 10 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <span style={{ fontSize: 13, fontWeight: 700, color: colors.text }}>{c.shop_name || c.shop_id}</span>
+            <span style={{ fontSize: 11, color: colors.textDim }}>{c.platform}</span>
+            <span style={{ marginLeft: 'auto', fontSize: 11, fontWeight: 600, color: c.status === 'connected' ? '#10b981' : '#f59e0b' }}>● {c.status === 'connected' ? '已連接' : c.status}</span>
+          </div>
+          <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
+            <button disabled={busy} onClick={() => sync(c.id)} style={btn('#3b82f6')}>同步訂單/店鋪</button>
+            <button disabled={busy} onClick={() => disconnect(c.id)} style={{ ...btnGhost(colors), color: '#ef4444', marginLeft: 'auto' }}>中斷</button>
+          </div>
+        </div>
+      ))}
+
+      <div style={{ fontSize: 11, color: colors.textDim, marginTop: 6 }}>
+        其他平台（momo / PChome / 樂天 / Amazon / eBay / Shopify / Lazada）：待接入，需各自的 API 金鑰與審核。
+      </div>
+    </div>
+  );
+}
 
 function EcommerceSection({ colors }) {
   const [accounts, setAccounts] = useState(() => {
@@ -1436,6 +1800,10 @@ function EcommerceSection({ colors }) {
 
   return (
     <div>
+      <EcommerceRealPanel colors={colors} />
+      <div style={{ fontSize: 11, color: colors.textDim, margin: '24px 0 8px', letterSpacing: '0.04em', textTransform: 'uppercase', fontWeight: 600 }}>
+        草稿（僅存本地瀏覽器，未實際連接平台）
+      </div>
       {accounts.map(account => (
         <AccountCard
           key={account.id}
@@ -1712,6 +2080,8 @@ export default function Settings() {
             <LogisticsSection colors={colors} />
           ) : activeSection === 'ads' ? (
             <AdsSection colors={colors} />
+          ) : activeSection === 'billing' ? (
+            <BillingSection colors={colors} />
           ) : (
             <>
               <div style={{

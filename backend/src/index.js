@@ -31,7 +31,8 @@ app.use(cors({
   origin: (origin, cb) => cb(null, !origin || allowedOrigins.includes(origin) || origin.endsWith('.railway.app')),
   credentials: true,
 }));
-app.use(express.json());
+// 捕捉原始 body（webhook 簽章驗證需要原文）；放寬上限以容納多模態附件
+app.use(express.json({ limit: '15mb', verify: (req, _res, buf) => { req.rawBody = buf; } }));
 
 // Health check (pre-DB, always available)
 app.get('/api/health', (req, res) => {
@@ -69,6 +70,9 @@ const usersRouter = require('./routes/users');
 const productListingsRouter = require('./routes/product-listings');
 const trendsRouter = require('./routes/trends');
 const predictionsRouter = require('./routes/predictions');
+const webhooksRouter = require('./routes/webhooks');
+const paymentsRouter = require('./routes/payments');
+const ecommerceRouter = require('./routes/ecommerce');
 
 // Dashboard and analytics are read-only stats — optionalAuth so the sidebar can poll without a token
 app.use('/api/dashboard', optionalAuth, dashboardRouter);
@@ -94,6 +98,12 @@ app.use('/api/global-kb', requireAuth, globalKbRouter);
 app.use('/api/knowledge', requireAuth, knowledgeRouter);
 app.use('/api/users', requireAuth, usersRouter);
 app.use('/api/product-listings', requireAuth, productListingsRouter);
+// Webhooks 為各平台伺服器回調，必須公開（簽章自行驗證，不走 Firebase auth）
+app.use('/api/webhooks', webhooksRouter);
+// 金流：notify/return 為藍新回調需公開；checkout/orders 從 req.user 取 uid（可選）→ optionalAuth
+app.use('/api/payments', optionalAuth, paymentsRouter);
+// 電商：Shopee OAuth callback 需公開（瀏覽器導回無 token）→ optionalAuth
+app.use('/api/ecommerce', optionalAuth, ecommerceRouter);
 
 // 生成的媒體檔（圖片/影片/音樂）— 由 routes/content.js 寫入 backend/data/media
 const mediaDir = path.join(__dirname, '..', 'data', 'media');

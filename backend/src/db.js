@@ -417,6 +417,58 @@ function initTables() {
   try { exec(`ALTER TABLE ai_reply_rules ADD COLUMN campaign_id INTEGER`); } catch (_) {}
   try { exec(`CREATE INDEX IF NOT EXISTS idx_messages_convo ON messages(conversation_id, sent_at)`); } catch (_) {}
   try { exec(`ALTER TABLE hub_configs ADD COLUMN ai_model TEXT DEFAULT ''`); } catch (_) {}
+
+  // ── 通訊帳號真實連接（憑證加密儲存 + 誠實連接狀態）──
+  // connection_status: disconnected | demo | connected | error
+  // connection_mode:   demo | real
+  try { exec(`ALTER TABLE comm_accounts ADD COLUMN access_token TEXT`); } catch (_) {}
+  try { exec(`ALTER TABLE comm_accounts ADD COLUMN channel_secret TEXT`); } catch (_) {}
+  try { exec(`ALTER TABLE comm_accounts ADD COLUMN refresh_token TEXT`); } catch (_) {}
+  try { exec(`ALTER TABLE comm_accounts ADD COLUMN token_expires_at DATETIME`); } catch (_) {}
+  try { exec(`ALTER TABLE comm_accounts ADD COLUMN platform_user_id TEXT`); } catch (_) {}
+  try { exec(`ALTER TABLE comm_accounts ADD COLUMN connection_status TEXT DEFAULT 'demo'`); } catch (_) {}
+  try { exec(`ALTER TABLE comm_accounts ADD COLUMN connection_mode TEXT DEFAULT 'demo'`); } catch (_) {}
+  try { exec(`ALTER TABLE comm_accounts ADD COLUMN last_verified_at DATETIME`); } catch (_) {}
+  try { exec(`ALTER TABLE comm_accounts ADD COLUMN last_error TEXT`); } catch (_) {}
+  try { exec(`ALTER TABLE comm_accounts ADD COLUMN meta_json TEXT DEFAULT '{}'`); } catch (_) {}
+
+  // ── 持久表：金流訂單 / 電商連接（絕不可加入 seedDemoData 清空清單）──
+  exec(`
+    CREATE TABLE IF NOT EXISTS payment_orders (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      tenant_id TEXT DEFAULT 'demo',
+      user_uid TEXT,
+      merchant_order_no TEXT UNIQUE NOT NULL,
+      plan TEXT,
+      item_desc TEXT,
+      amount INTEGER NOT NULL,
+      currency TEXT DEFAULT 'TWD',
+      status TEXT DEFAULT 'pending',
+      pay_method TEXT,
+      provider TEXT DEFAULT 'newebpay',
+      provider_trade_no TEXT,
+      payer_email TEXT,
+      raw_result TEXT,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      paid_at DATETIME
+    );
+
+    CREATE TABLE IF NOT EXISTS ecommerce_connections (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      tenant_id TEXT DEFAULT 'demo',
+      platform TEXT NOT NULL,
+      shop_id TEXT,
+      shop_name TEXT,
+      access_token TEXT,
+      refresh_token TEXT,
+      token_expires_at DATETIME,
+      status TEXT DEFAULT 'disconnected',
+      mode TEXT DEFAULT 'real',
+      meta_json TEXT DEFAULT '{}',
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      last_sync_at DATETIME
+    );
+  `);
 }
 
 function seedDemoData() {
@@ -614,17 +666,21 @@ function seedDemoData() {
       [type, prompt, output, model, tokens]);
   });
 
-  exec(`DELETE FROM comm_accounts`);
-  exec(`DELETE FROM sqlite_sequence WHERE name='comm_accounts'`);
-  [
-    ['line', 'LINE Official 官方帳號', '@growthos_official', 'https://api.line.me/webhook'],
-    ['whatsapp', 'WhatsApp Business', '+886-900-000-001', 'https://graph.facebook.com/webhook'],
-    ['telegram', 'Telegram Bot', '@GrowthOS_bot', 'https://api.telegram.org/webhook'],
-    ['email', 'Support Email', 'support@growthos.ai', null],
-  ].forEach(([platform, name, channelId, webhook]) => {
-    run(`INSERT INTO comm_accounts (platform, account_name, channel_id, webhook_url) VALUES (?,?,?,?)`,
-      [platform, name, channelId, webhook]);
-  });
+  // 只清空 demo 帳號；保留使用者已連接的真實帳號（有憑證者）跨重啟存活
+  exec(`DELETE FROM comm_accounts WHERE connection_mode IS NULL OR connection_mode = 'demo'`);
+  // 僅當沒有任何 demo 帳號時才補播種（避免每次啟動重複堆疊；真實帳號不影響）
+  const demoCount = get(`SELECT COUNT(*) c FROM comm_accounts WHERE connection_mode = 'demo'`).c;
+  if (demoCount === 0) {
+    [
+      ['line', 'LINE Official 官方帳號（示範）', '@growthos_official', 'https://api.line.me/webhook'],
+      ['whatsapp', 'WhatsApp Business（示範）', '+886-900-000-001', 'https://graph.facebook.com/webhook'],
+      ['telegram', 'Telegram Bot（示範）', '@GrowthOS_bot', 'https://api.telegram.org/webhook'],
+      ['email', 'Support Email（示範）', 'support@growthos.ai', null],
+    ].forEach(([platform, name, channelId, webhook]) => {
+      run(`INSERT INTO comm_accounts (platform, account_name, channel_id, webhook_url, connection_status, connection_mode) VALUES (?,?,?,?, 'demo', 'demo')`,
+        [platform, name, channelId, webhook]);
+    });
+  }
 
   // 語音通話紀錄（platform='voice'）是真實用戶資料，跨重啟保留；只重灌文字 demo 對話
   exec(`DELETE FROM messages WHERE conversation_id IN (SELECT id FROM conversations WHERE platform != 'voice')`);
